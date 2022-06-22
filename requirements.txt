@@ -1,0 +1,1 @@
+git+ssh://git@github.com/hadware/pyannote-audio.git@feat-vtc-preprocessors#egg=pyannote.audio
