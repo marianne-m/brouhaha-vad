@@ -1,3 +1,4 @@
+from turtle import forward
 from typing import Optional
 from pyannote.audio import Model
 from pyannote.audio.core.task import Specifications
@@ -11,8 +12,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-def logistic_function(max: float = 1, min: float=0):
-    return lambda x: (max - min) * nn.Sigmoid(x) + min
+class ParametricSigmoid(nn.Module):
+    def __init__(self, alpha: float, beta: float) -> None:
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+    
+    def forward(self, x: torch.Tensor):
+        return (self.beta - self.alpha) * torch.special.expit(x) + self.alpha
+
 
 class RegressiveSegmentationModelMixin(Model):
     pass
@@ -34,15 +42,10 @@ class RegressiveSegmentationModelMixin(Model):
 
         self.activations = nn.ModuleDict({
                 'vad': nn.Sigmoid(),
-                'snr': nn.Sigmoid(), #min=-10, max=30),
-                'c50': nn.Sigmoid(), #min = -10, max=60),
+                'snr': ParametricSigmoid(30, -10),
+                'c50': ParametricSigmoid(60, -10),
         })
 
-        # self.activations = nn.ModuleDict({
-        #         'vad': nn.Sigmoid(),
-        #         'snr': logistic_function(30, -10), #min=-10, max=30),
-        #         'c50': logistic_function(60, -10), #min = -10, max=60),
-        # })
 
     def forward(self, waveforms: torch.Tensor) -> torch.Tensor:
         """
@@ -61,11 +64,11 @@ class RegressiveSegmentationModelMixin(Model):
         output, hidden = self.lstm(rearrange(mfcc, "b c f t -> b t (c f)"))
         # apply the final classifier to get logits
         out = []
-        for mode, params in zip(['vad', 'snr', 'c50'], [(0,1), (-10,30), (-10, 60)]):
-            min_p, max_p = params
-            _output = (max_p-min_p)*self.activations[mode](self.choices[mode](output)) + min_p
+
+        for mode in ['vad', 'snr', 'c50']:
+            _output = self.activations[mode](self.choices[mode](output)) 
             out.append(_output)
-        
+
         out = torch.stack(out)
         out = rearrange(out, "n b t o -> b t (n o)")
         return out
