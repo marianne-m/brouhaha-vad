@@ -22,6 +22,44 @@ class ParametricSigmoid(nn.Module):
         return (self.beta - self.alpha) * torch.special.expit(x) + self.alpha
 
 
+class CustomClassifier(nn.Module):
+    def __init__(self, in_features, out_features: int) -> None:
+        super().__init__()
+        self.linears = nn.ModuleDict({
+            'vad': nn.Linear(in_features, out_features),
+            'snr': nn.Linear(in_features, 1),
+            'c50': nn.Linear(in_features, 1),
+        })
+    
+    def forward(self, x: torch.Tensor):
+        out = dict()
+        for mode, linear in self.linears.items():
+            _output = linear(x) 
+            out[mode] = _output
+        
+        return out
+
+
+class CustomActivation(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.activations = nn.ModuleDict({
+            'vad': nn.Sigmoid(),
+            'snr': ParametricSigmoid(30, -10),
+            'c50': ParametricSigmoid(60, -10),
+        })
+
+    def forward(self, x: torch.Tensor):
+        out = list()
+        for mode, activation in self.activations.items():
+            _output = activation(x[mode]) 
+            out.append(_output)
+
+        out = torch.stack(out)
+        out = rearrange(out, "n b t o -> b t (n o)")
+        return out
+
+
 class RegressiveSegmentationModelMixin(Model):
     pass
 
@@ -34,48 +72,22 @@ class RegressiveSegmentationModelMixin(Model):
 
 
     def build(self):
-        self.choices = nn.ModuleDict({
-                'vad': nn.Linear(32 * 2, len(self.specifications.classes)),
-                'snr': nn.Linear(32 * 2, 1),
-                'c50': nn.Linear(32 * 2, 1),
-        })
-
-        self.activations = nn.ModuleDict({
-                'vad': nn.Sigmoid(),
-                'snr': ParametricSigmoid(30, -10),
-                'c50': ParametricSigmoid(60, -10),
-        })
-
-
-    def forward(self, waveforms: torch.Tensor) -> torch.Tensor:
-        """
-
-        Parameters
-        ----------
-        waveforms : (batch, time, channel)
-
-        Returns
-        -------
-        scores : (batch, time, [classes snr c50])
-        """
-        # extract MFCC
-        mfcc = self.mfcc(waveforms)
-        # pass MFCC sequeence into the recurrent layer
-        output, hidden = self.lstm(rearrange(mfcc, "b c f t -> b t (c f)"))
-        # apply the final classifier to get logits
-        out = []
-
-        for mode in ['vad', 'snr', 'c50']:
-            _output = self.activations[mode](self.choices[mode](output)) 
-            out.append(_output)
-
-        out = torch.stack(out)
-        out = rearrange(out, "n b t o -> b t (n o)")
-        return out
-
+        self.classifier = CustomClassifier(32 * 2, len(self.specifications.classes))
+        self.activation = CustomActivation()
+    
 
 class CustomSimpleSegmentationModel(RegressiveSegmentationModelMixin, SimpleSegmentationModel):
     pass
 
+
 class CustomPyanNetModel(RegressiveSegmentationModelMixin, PyanNet):
-    pass
+    def build(self):
+        if self.hparams.linear["num_layers"] > 0:
+            in_features = self.hparams.linear["hidden_size"]
+        else:
+            in_features = self.hparams.lstm["hidden_size"] * (
+                2 if self.hparams.lstm["bidirectional"] else 1
+            )
+
+        self.classifier = CustomClassifier(in_features, len(self.specifications.classes))
+        self.activation = CustomActivation()
