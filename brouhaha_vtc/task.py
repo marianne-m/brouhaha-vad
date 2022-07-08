@@ -1,6 +1,5 @@
 import itertools
 from re import T
-from pyannote.audio.tasks import MultilabelDetection, VoiceActivityDetection
 
 from typing import Dict, Sequence, Text, Tuple, Union
 
@@ -209,10 +208,105 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         loss = loss_vad + lambda_1 * loss_snr + lambda_2 * loss_c50
 
-        return loss
+        return loss, loss_vad, loss_snr, loss_c50
+    
+    def validation_step(self, batch, batch_idx: int):
+        """Compute validation area under the ROC curve
 
-    def default_metric(
-        self,
-    ) -> Union[Metric, Sequence[Metric], Dict[str, Metric]]:
-        """Returns macro-average of the area under the ROC curve"""
-        return MeanSquaredError()
+        Parameters
+        ----------
+        batch : dict of torch.Tensor
+            Current batch.
+        batch_idx: int
+            Batch index.
+        """
+
+        X, y = batch["X"], batch["y"]
+        # X = (batch_size, num_channels, num_samples)
+        # y = (batch_size, num_frames, num_classes) or (batch_size, num_frames)
+
+        y_pred = self.model(X)
+        _, num_frames, _ = y_pred.shape
+        # y_pred = (batch_size, num_frames, num_classes)
+
+        # - remove warm-up frames
+        # - downsample remaining frames
+        warm_up_left = round(self.warm_up[0] / self.duration * num_frames)
+        warm_up_right = round(self.warm_up[1] / self.duration * num_frames)
+        preds = y_pred[:, warm_up_left : num_frames - warm_up_right : 10]
+        target = y[:, warm_up_left : num_frames - warm_up_right : 10]
+
+        # for now we keep AUROC on VAD as validation metric
+        self.model.validation_metric(
+            preds[:,:,0].reshape(-1),
+            target[:,:,0].reshape(-1),
+        )
+
+        self.model.log_dict(
+            self.model.validation_metric,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+
+    def training_step(self, batch, batch_idx: int):
+        """Default training or validation step according to task specification
+
+            * binary cross-entropy loss for binary or multi-label classification
+            * negative log-likelihood loss for regular classification
+
+        If "weight" attribute exists, batch[self.weight] is also passed to the loss function
+        during training (but has no effect in validation).
+
+        Parameters
+        ----------
+        batch : (usually) dict of torch.Tensor
+            Current batch.
+        batch_idx: int
+            Batch index.
+        stage : {"train", "val"}
+            "train" for training step, "val" for validation step
+
+        Returns
+        -------
+        loss : {str: torch.tensor}
+            {"loss": loss}
+        """
+
+        # forward pass
+        y_pred = self.model(batch["X"])
+
+        batch_size, num_frames, _ = y_pred.shape
+        # (batch_size, num_frames, num_classes)
+
+        # target
+        y = batch["y"]
+
+        # frames weight
+        weight_key = getattr(self, "weight", None)
+        weight = batch.get(
+            weight_key,
+            torch.ones(batch_size, num_frames, 1, device=self.model.device),
+        )
+        # (batch_size, num_frames, 1)
+
+        # warm-up
+        warm_up_left = round(self.warm_up[0] / self.duration * num_frames)
+        weight[:, :warm_up_left] = 0.0
+        warm_up_right = round(self.warm_up[1] / self.duration * num_frames)
+        weight[:, num_frames - warm_up_right :] = 0.0
+
+        # compute loss
+        losses = self.default_loss(self.specifications, y, y_pred, weight=weight)
+
+        for loss, loss_type in zip(losses, ['Train', 'vad', 'snr', 'c50']):
+            self.model.log( 
+                f"{self.logging_prefix}{loss_type}Loss",
+                loss,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                logger=True,
+            )
+        return {"loss": loss}
