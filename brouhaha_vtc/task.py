@@ -69,6 +69,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         self.balance = balance
         self.weight = weight
+        self.first_loss_c50 = 1
+        self.first_loss_c50 = 1
 
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
@@ -174,7 +176,15 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
     
     # def validation_step(self, batch, batch_idx: int):
     #     return self.common_step(batch, batch_idx, "val")
-    
+
+    def set_first_losses(
+        self, specifications: Specifications, target, prediction, weight=None
+    ) -> torch.Tensor:
+        print("settings the first losses")
+        self.first_loss_snr = float(mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight))
+        self.first_loss_c50 = float(mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight))
+
+
     def default_loss(
         self, specifications: Specifications, target, prediction, weight=None
     ) -> torch.Tensor:
@@ -205,6 +215,9 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0], weight=weight)
         loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight)
         loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight)
+
+        loss_snr = loss_snr / self.first_loss_snr
+        loss_c50 = loss_c50 / self.first_loss_c50
 
         loss = loss_vad + lambda_1 * loss_snr + lambda_2 * loss_c50
 
@@ -296,6 +309,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         weight[:, :warm_up_left] = 0.0
         warm_up_right = round(self.warm_up[1] / self.duration * num_frames)
         weight[:, num_frames - warm_up_right :] = 0.0
+
+        # set first loss for snr and c50
+        if self.model.current_epoch == 0 and batch_idx == 0:
+            self.set_first_losses(self.specifications, y, y_pred, weight=weight)
 
         # compute loss
         losses = self.default_loss(self.specifications, y, y_pred, weight=weight)
