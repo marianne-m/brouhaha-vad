@@ -19,7 +19,7 @@ class ParametricSigmoid(nn.Module):
         self.beta = beta
     
     def forward(self, x: torch.Tensor):
-        return (self.beta - self.alpha) * torch.special.expit(x) + self.alpha
+        return (self.beta - self.alpha) * F.sigmoid(x) + self.alpha
 
 
 class CustomClassifier(nn.Module):
@@ -41,6 +41,8 @@ class CustomClassifier(nn.Module):
 
 
 class CustomActivation(nn.Module):
+    # Try something else for snr and c50
+    # TODO : print and save alpha and beta values of ParametricSigmoid
     def __init__(self) -> None:
         super().__init__()
         self.activations = nn.ModuleDict({
@@ -61,16 +63,6 @@ class CustomActivation(nn.Module):
 
 
 class RegressiveSegmentationModelMixin(Model):
-    pass
-
-    # TODO: overwrite `build` to build 3 different FC linear activations, one for each
-    # TODO : we should probably overwrite the `default_activation` to return a custom activation function
-    
-        #TODO: Create a linear + activation block for the three last linear layers
-        # The aim is to modify build and not forward
-        # dict module for linear blocks
-
-
     def build(self):
         self.classifier = CustomClassifier(32 * 2, len(self.specifications.classes))
         self.activation = CustomActivation()
