@@ -75,7 +75,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
             resolution=Resolution.FRAME,
-            duration=0.5,
+            duration=self.duration,
             warm_up=self.warm_up,
             classes=[
                 "speech",

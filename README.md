@@ -27,7 +27,7 @@ train/
 ├── reverb_labels.txt
 └── rttm_files
     └── file_1.rttm
-│   └── ...
+    └── ...
 ```
 
 Define your database in the `~/.pyannote/database.yml` file with this line :
