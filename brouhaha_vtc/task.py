@@ -75,7 +75,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
             resolution=Resolution.FRAME,
-            duration=self.duration,
+            duration=0.5,
             warm_up=self.warm_up,
             classes=[
                 "speech",
@@ -83,6 +83,27 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         )
 
     def collate_y(self, batch) -> torch.Tensor:
+        """Collate the speakers detection, snr labels and c50 labels
+        into one target tensor
+
+        Parameters
+        ----------
+        batch : (batch_size) list of dict
+            Dictionaries with the following keys:
+            X : np.ndarray
+                Audio chunk as (num_samples, num_channels) array.
+            y : SlidingWindowFeature
+                Frame-wise (labels snr c50) as (num_frames, num_labels + 2) array.
+
+        Returns
+        -------
+        Y: (batch_size, num_frames, num_speakers + 2) tensor
+            One-hot-encoding of current chunk speaker activity, snr label and c50 label:
+                * one_hot_y[b, f, s] = 1 if sth speaker is active at fth frame
+                * one_hot_y[b, f, s] = 0 otherwise.
+                * one_hot_y[b, f, -2] = snr_label
+                * one_hot_y[b, f, -1] = c50_label
+        """
         # gather common set of labels
         # b["y"] is a SlidingWindowFeature instance
         labels = sorted(set(itertools.chain(*(b["y"].labels for b in batch))))
@@ -103,19 +124,24 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         return torch.from_numpy(Y)
 
     def adapt_y(self, collated_y: torch.Tensor) -> torch.Tensor:
-        """Get voice activity detection targets
+        """Get voice activity detection targets, snr_label targets
+        and c50_label targets
 
         Parameters
         ----------
-        collated_y : (batch_size, num_frames, num_speakers) tensor
+        collated_y : (batch_size, num_frames, num_speakers + 2) tensor
             One-hot-encoding of current chunk speaker activity:
                 * one_hot_y[b, f, s] = 1 if sth speaker is active at fth frame
                 * one_hot_y[b, f, s] = 0 otherwise.
+                * one_hot_y[b, f, -2] = snr_label
+                * one_hot_y[b, f, -1] = c50_label
 
         Returns
         -------
-        y : (batch_size, num_frames, ) tensor
-            y[b, f] = 1 if at least one speaker is active at fth frame, 0 otherwise.
+        y : (batch_size, num_frames, 3) tensor
+            y[b, f, 0] = 1 if at least one speaker is active at fth frame, 0 otherwise.
+            y[b, f, 1] = snr_label
+            y[b, f, 2] = c50_label
         """
         speaker_feat = 1 * (torch.sum(collated_y[:,:,:-2], dim=2, keepdims=False) > 0)
         snr_feat = collated_y[:,:,-2]
@@ -174,12 +200,12 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         return sample
     
-    # def validation_step(self, batch, batch_idx: int):
-    #     return self.common_step(batch, batch_idx, "val")
 
     def set_first_losses(
         self, specifications: Specifications, target, prediction, weight=None
     ) -> torch.Tensor:
+        """Compute and set the first snr_loss and c50_loss for normalization
+        """
         print("settings the first losses")
         self.first_loss_snr = float(mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight))
         self.first_loss_c50 = float(mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight))
@@ -188,26 +214,40 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
     def default_loss(
         self, specifications: Specifications, target, prediction, weight=None
     ) -> torch.Tensor:
-        """Guess and compute default loss according to task specification
+        """Compute the specific loss for the RegressiveActivityDetectionTask
+        Three separate losses are computed :
+            * Binary cross-entropy for Voice Activity Detection
+            * Mean Square Error for snr labels
+            * Mean Square Error for c50 labels
+        The global loss is the normalized mean of the three losses.
 
         Parameters
         ----------
         specifications : Specifications
             Task specifications
         target : torch.Tensor
-            * (batch_size, num_frames) for binary classification
-            * (batch_size, num_frames) for multi-class classification
-            * (batch_size, num_frames, num_classes) for multi-label classification
+            (batch_size, num_frames, 3)
+            target[b, f, 0] = 1 if at least one speaker is active at fth frame, 0 otherwise.
+            target[b, f, 1] = snr_label
+            target[b, f, 2] = c50_label
         prediction : torch.Tensor
-            (batch_size, num_frames, num_classes)
+            (batch_size, num_frames, 3)
+            prediction[b, f, 0] = 1 if at least one speaker is predicted active at fth frame, 0 otherwise.
+            prediction[b, f, 1] = predicted snr_label
+            prediction[b, f, 2] = predicted c50_label
         weight : torch.Tensor, optional
             (batch_size, num_frames, 1)
 
         Returns
         -------
         loss : torch.Tensor
-            Binary cross-entropy loss in case of binary and multi-label classification,
-            Negative log-likelihood loss in case of multi-class classification.
+            Normalized mean of the three following losses
+        loss_vad : torch.Tensor
+            Binary cross-entropy 
+        loss_snr : torch.Tensor
+            Mean Square Error normalized by the first value
+        loss_c50 : torch.Tensor
+            Mean Square Error normalized by the first value
 
         """
         lambda_1 = 1
@@ -264,10 +304,9 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         )
 
     def training_step(self, batch, batch_idx: int):
-        """Default training or validation step according to task specification
+        """Training step according specific to RegressiveActivityDetectionTask
 
-            * binary cross-entropy loss for binary or multi-label classification
-            * negative log-likelihood loss for regular classification
+        Custom loss : Normalized mean of BCE on VAD, MSE on SNR, MSE on c50
 
         If "weight" attribute exists, batch[self.weight] is also passed to the loss function
         during training (but has no effect in validation).
