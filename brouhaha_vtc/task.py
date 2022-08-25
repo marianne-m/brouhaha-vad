@@ -113,7 +113,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             len(batch[0]["y"]),
             len(labels),
         )
-        Y = np.zeros((batch_size, num_frames, num_labels + 2), dtype=np.int64)
+        Y = np.zeros((batch_size, num_frames, num_labels + 2))
 
         for i, b in enumerate(batch):
             for local_idx, label in enumerate(b["y"].labels):
@@ -291,8 +291,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         # for now we keep AUROC on VAD as validation metric
         self.model.validation_metric(
-            preds[:,:,0].reshape(-1),
-            target[:,:,0].reshape(-1),
+            preds[:,:,0].reshape(-1).int(),
+            target[:,:,0].reshape(-1).int(),
         )
 
         self.model.log_dict(
@@ -365,4 +365,4 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
                 prog_bar=True,
                 logger=True,
             )
-        return {"loss": loss}
+        return {"loss": losses[0]}
