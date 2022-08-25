@@ -119,7 +119,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             for local_idx, label in enumerate(b["y"].labels):
                 global_idx = labels.index(label)
                 Y[i, :, global_idx] = b["y"].data[:, local_idx]
-                Y[i, :, -2:] = b["y"].data[:, -2:]
+            Y[i, :, -2:] = b["y"].data[:, -2:]
 
         return torch.from_numpy(Y)
 
