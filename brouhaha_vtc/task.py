@@ -296,7 +296,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         # for now we keep AUROC on VAD as validation metric
         self.model.validation_metric(
-            preds[:,:,0].reshape(-1).int(),
+            preds[:,:,0].reshape(-1),
             target[:,:,0].reshape(-1).int(),
         )
 
