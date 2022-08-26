@@ -69,8 +69,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         self.balance = balance
         self.weight = weight
+        self.first_loss_snr = 1
         self.first_loss_c50 = 1
-        self.first_loss_c50 = 1
+        self.first_losses_c50 = []
+        self.first_losses_snr = []
 
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
@@ -207,8 +209,11 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         """Compute and set the first snr_loss and c50_loss for normalization
         """
         print("settings the first losses")
-        self.first_loss_snr = float(mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight))
-        self.first_loss_c50 = float(mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight))
+        self.first_losses_snr.append(float(mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight)))
+        self.first_losses_c50.append(float(mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight)))
+
+        self.first_loss_snr = max(self.first_losses_snr)
+        self.first_loss_c50 = max(self.first_losses_c50)
 
 
     def default_loss(
@@ -350,7 +355,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         weight[:, num_frames - warm_up_right :] = 0.0
 
         # set first loss for snr and c50
-        if self.model.current_epoch == 0 and batch_idx == 0:
+        if self.model.current_epoch == 0 and batch_idx < 10:
             self.set_first_losses(self.specifications, y, y_pred, weight=weight)
 
         # compute loss
