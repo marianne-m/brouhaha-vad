@@ -10,8 +10,8 @@ import pandas as pd
 from pyannote.audio import Model
 from pyannote.audio.models.segmentation import PyanNet
 from pyannote.audio.models.segmentation.debug import SimpleSegmentationModel
-from pyannote.audio.pipelines import MultilabelDetection as MultilabelDetectionPipeline
-from pyannote.audio.tasks.segmentation.multilabel_detection import MultilabelDetection
+# from pyannote.audio.pipelines import MultiLabelSegmentation as MultilabelDetectionPipeline
+# from pyannote.audio.tasks.segmentation.multilabel import MultiLabelSegmentation
 from pyannote.core import Annotation
 from pyannote.audio.utils.preprocessors import DeriveMetaLabels
 from pyannote.database import FileFinder, get_protocol, ProtocolFile
@@ -24,6 +24,9 @@ from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
+from brouhaha_vtc.models import CustomPyanNetModel, CustomSimpleSegmentationModel
+
+from brouhaha_vtc.task import RegressiveActivityDetectionTask
 
 
 class ProcessorChain:
@@ -51,7 +54,10 @@ CLASSES = {"vtcdebug": {'classes': ["READER", "AGREER", "DISAGREER"],
                            'intersections': {}},
            "babytrain": {'classes': ["MAL", "FEM", "CHI", "KCHI"],
                          'unions': {"SPEECH": ["MAL", "FEM", "CHI", "KCHI"]},
-                         'intersections': {}}
+                         'intersections': {}},
+           "brouhaha": {'classes': ["A"],
+                        'unions': {},
+                        'intersections': {}}
            }
 
 
@@ -70,24 +76,25 @@ class BaseCommand:
     @classmethod
     def get_protocol(cls, args: Namespace):
         classes_kwargs = CLASSES[args.classes]
-        vtc_preprocessor = DeriveMetaLabels(**classes_kwargs)
+        vad_preprocessor = DeriveMetaLabels(**classes_kwargs)
         preprocessors = {
             "audio": FileFinder(),
-            "annotation": vtc_preprocessor
+            "annotation": vad_preprocessor
         }
         if args.classes == "babytrain":
             with open(Path(__file__).parent / "data/babytrain_mapping.yml") as mapping_file:
                 mapping_dict = yaml.safe_load(mapping_file)["mapping"]
             preprocessors["annotation"] = ProcessorChain([
                 LabelMapper(mapping_dict, keep_missing=True),
-                vtc_preprocessor
+                vad_preprocessor
             ], key="annotation")
         return get_protocol(args.protocol, preprocessors=preprocessors)
 
     @classmethod
     def get_task(cls, args: Namespace):
         protocol = cls.get_protocol(args)
-        task = MultilabelDetection(protocol, duration=2.00)
+        protocol.data_dir = Path(args.data_dir)
+        task = RegressiveActivityDetectionTask(protocol, duration=2.00, num_workers=0)
         task.setup()
         return task
 
@@ -99,7 +106,7 @@ class TrainCommand(BaseCommand):
     @classmethod
     def init_parser(cls, parser: ArgumentParser):
         parser.add_argument("-p", "--protocol", type=str,
-                            default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
+                            default="BrouhahaDebug.SpeakerDiarization.RegressionPoetryRecital",
                             help="Pyannote database")
         parser.add_argument("--classes", choices=CLASSES.keys(),
                             required=True,
@@ -111,18 +118,22 @@ class TrainCommand(BaseCommand):
                             help="Resume from last checkpoint")
         parser.add_argument("--epoch", type=int, required=True,
                             help="Number of train epoch")
+        parser.add_argument("--data_dir", type=str, required=True,
+                            help="Path to the data directory")
+        parser.add_argument("--gpu", type=int, default=1,
+                            help="Number of gpu. Default 1.")
 
     @classmethod
     def run(cls, args: Namespace):
 
-        vtc = cls.get_task(args)
+        vad = cls.get_task(args)
 
         if args.model_type == "simple":
-            model = SimpleSegmentationModel(task=vtc)
+            model = CustomSimpleSegmentationModel(task=vad)
         else:
-            model = PyanNet(task=vtc)
+            model = CustomPyanNetModel(task=vad)
 
-        value_to_monitor, min_or_max = vtc.val_monitor
+        value_to_monitor, min_or_max = vad.val_monitor
 
         checkpoints_path: Path = args.exp_dir / "checkpoints/"
         checkpoints_path.mkdir(parents=True, exist_ok=True)
@@ -148,11 +159,12 @@ class TrainCommand(BaseCommand):
             verbose=False)
 
         logger = TensorBoardLogger(args.exp_dir,
-                                   name="VTCTest", version="", log_graph=False)
-        trainer_kwargs = {'devices': 1,
+                                   name="VADTest", version="", log_graph=False)
+        trainer_kwargs = {'devices': args.gpu,
                           'accelerator': "gpu",
-                          'callbacks': [model_checkpoint, early_stopping],
-                          'logger': logger}
+                          'callbacks': [model_checkpoint], #, early_stopping],
+                          'logger': logger,
+                          'max_epochs': args.epoch}
         if args.resume:
             trainer_kwargs["resume_from_checkpoint"] = checkpoints_path / "last.ckpt"
 
