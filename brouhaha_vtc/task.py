@@ -1,12 +1,12 @@
 import itertools
 from re import T
 
-from typing import Dict, Sequence, Text, Tuple, Union
+from typing import Dict, Optional, Sequence, Text, Tuple, Union
 
 import torch
 from pyannote.database import Protocol
 from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
-from torchmetrics import Metric, MeanSquaredError
+from torchmetrics import AUROC, Metric, MeanSquaredError
 
 from pyannote.audio.core.task import Problem, Resolution, Specifications, Task
 from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
@@ -19,6 +19,31 @@ from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
 
 import numpy as np
 
+class CustomValidationMetric(Metric):
+    higher_is_better: Optional[bool] = False
+    def __init__(self, snr_mse_max: float, c50_mse_max: float, num_classes: int = None):
+        super().__init__()
+        self.add_state("auroc", default=torch.tensor(0))
+        self.add_state("mse_snr", default=torch.tensor(0))
+        self.add_state("mse_c50", default=torch.tensor(0))
+
+        self.auroc_metric = AUROC(num_classes, pos_label=1, average="macro")
+        self.snr_mse_max = snr_mse_max
+        self.c50_mse_max = c50_mse_max
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        assert preds.shape == target.shape
+    
+        self.auroc = self.auroc_metric(preds[:,:,0].reshape(-1), target[:,:,0].reshape(-1))
+        self.mse_snr = mse_loss(preds[:,:,1].reshape(-1), target[:,:,1].reshape(-1))
+        self.mse_c50 = mse_loss(preds[:,:,2].reshape(-1), target[:,:,2].reshape(-1))
+
+    def compute(self):
+        return ((1 - self.auroc) + self.mse_snr/self.snr_mse_max + self.mse_c50/self.c50_mse_max)/3
+
+    def update_max_values(self, snr_max: float, c50_max: float):
+        self.snr_mse_max = snr_max
+        self.c50_mse_max = c50_max
 
 
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
@@ -73,6 +98,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_loss_c50 = 1
         self.first_losses_c50 = []
         self.first_losses_snr = []
+
+        self.auroc = AUROC(num_classes=None, pos_label=1, average="macro")
 
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
@@ -267,7 +294,24 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         loss = loss_vad + lambda_1 * loss_snr + lambda_2 * loss_c50
 
         return loss, loss_vad, loss_snr, loss_c50
-    
+
+    def default_metric(
+        self,
+    ) -> Union[Metric, Sequence[Metric], Dict[str, Metric]]:
+        """Returns average of AUROC for VAD, MSE on snr regression and MSE on c50 regression"""
+
+        return CustomValidationMetric(self.first_loss_snr, self.first_loss_c50)
+
+    def detailed_validation_metrics(
+        self, preds, target
+    ) -> torch.tensor:
+
+        auroc = self.auroc(preds[:,:,0].reshape(-1), target[:,:,0].reshape(-1))
+        mse_snr = mse_loss(preds[:,:,1].reshape(-1), target[:,:,1].reshape(-1))
+        mse_c50 = mse_loss(preds[:,:,2].reshape(-1), target[:,:,2].reshape(-1))
+
+        return auroc, mse_snr, mse_c50
+
     def validation_step(self, batch, batch_idx: int):
         """Compute validation area under the ROC curve
 
@@ -296,8 +340,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         # for now we keep AUROC on VAD as validation metric
         self.model.validation_metric(
-            preds[:,:,0].reshape(-1),
-            target[:,:,0].reshape(-1).int(),
+            preds,
+            target.int(),
         )
 
         self.model.log_dict(
@@ -307,6 +351,17 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             prog_bar=True,
             logger=True,
         )
+
+        metrics = self.detailed_validation_metrics(preds, target.int())
+        for validation, val_type in zip(metrics, ['vad', 'snr', 'c50']):
+            self.model.log( 
+                f"{self.logging_prefix}{val_type}Metric",
+                validation,
+                on_step=False,
+                on_epoch=True,
+                prog_bar=True,
+                logger=True,
+            )
 
     def training_step(self, batch, batch_idx: int):
         """Training step according specific to RegressiveActivityDetectionTask
