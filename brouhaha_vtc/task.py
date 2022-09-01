@@ -6,7 +6,8 @@ from typing import Dict, Optional, Sequence, Text, Tuple, Union
 import torch
 from pyannote.database import Protocol
 from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
-from torchmetrics import AUROC, Metric, MeanSquaredError
+from torchmetrics import AUROC, Metric, MeanAbsolutePercentageError, MetricCollection
+import torchmetrics.functional as F
 
 from pyannote.audio.core.task import Problem, Resolution, Specifications, Task
 from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
@@ -19,31 +20,37 @@ from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
 
 import numpy as np
 
-class CustomValidationMetric(Metric):
+class CustomMAPE(Metric):
     higher_is_better: Optional[bool] = False
-    def __init__(self, snr_mse_max: float, c50_mse_max: float, num_classes: int = None):
+    full_state_update: Optional[bool] = False
+    def __init__(self, output_transform=None):
         super().__init__()
-        self.add_state("auroc", default=torch.tensor(0))
-        self.add_state("mse_snr", default=torch.tensor(0))
-        self.add_state("mse_c50", default=torch.tensor(0))
-
-        self.auroc_metric = AUROC(num_classes, pos_label=1, average="macro")
-        self.snr_mse_max = snr_mse_max
-        self.c50_mse_max = c50_mse_max
+        self.output_transform = output_transform
 
     def update(self, preds: torch.Tensor, target: torch.Tensor):
         assert preds.shape == target.shape
-    
-        self.auroc = self.auroc_metric(preds[:,:,0].reshape(-1), target[:,:,0].reshape(-1))
-        self.mse_snr = mse_loss(preds[:,:,1].reshape(-1), target[:,:,1].reshape(-1))
-        self.mse_c50 = mse_loss(preds[:,:,2].reshape(-1), target[:,:,2].reshape(-1))
+
+        preds, target = self.output_transform(preds, target)
+        self.mape = F.mean_absolute_percentage_error(preds, target)
 
     def compute(self):
-        return ((1 - self.auroc) + self.mse_snr/self.snr_mse_max + self.mse_c50/self.c50_mse_max)/3
+        return self.mape
 
-    def update_max_values(self, snr_max: float, c50_max: float):
-        self.snr_mse_max = snr_max
-        self.c50_mse_max = c50_max
+class CustomAUROC(Metric):
+    higher_is_better: Optional[bool] = True
+    full_state_update: Optional[bool] = False
+    def __init__(self, output_transform=None):
+        super().__init__()
+        self.output_transform = output_transform
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        assert preds.shape == target.shape
+
+        preds, target = self.output_transform(preds, target)
+        self.auroc = F.auroc(preds, target)
+
+    def compute(self):
+        return self.auroc
 
 
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
@@ -99,8 +106,6 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_losses_c50 = []
         self.first_losses_snr = []
 
-        self.auroc = AUROC(num_classes=None, pos_label=1, average="macro")
-
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
             resolution=Resolution.FRAME,
@@ -145,10 +150,12 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         Y = np.zeros((batch_size, num_frames, num_labels + 2))
 
         for i, b in enumerate(batch):
+            data = np.where(np.isinf(b["y"].data), 100, b["y"].data)
+            data = np.where(np.isnan(data), 100, data)
             for local_idx, label in enumerate(b["y"].labels):
                 global_idx = labels.index(label)
                 Y[i, :, global_idx] = b["y"].data[:, local_idx]
-            Y[i, :, -2:] = b["y"].data[:, -2:]
+            Y[i, :, -2:] = data[:, -2:]
 
         return torch.from_numpy(Y)
 
@@ -299,18 +306,13 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self,
     ) -> Union[Metric, Sequence[Metric], Dict[str, Metric]]:
         """Returns average of AUROC for VAD, MSE on snr regression and MSE on c50 regression"""
-
-        return CustomValidationMetric(self.first_loss_snr, self.first_loss_c50)
-
-    def detailed_validation_metrics(
-        self, preds, target
-    ) -> torch.tensor:
-
-        auroc = self.auroc(preds[:,:,0].reshape(-1), target[:,:,0].reshape(-1))
-        mse_snr = mse_loss(preds[:,:,1].reshape(-1), target[:,:,1].reshape(-1))
-        mse_c50 = mse_loss(preds[:,:,2].reshape(-1), target[:,:,2].reshape(-1))
-
-        return auroc, mse_snr, mse_c50
+        def transform(index):
+            return lambda preds, target: (preds[:,:,index].reshape(-1), target[:,:,index].reshape(-1))
+        return {
+            "vad": CustomAUROC(output_transform = transform(0)),
+            "snr": CustomMAPE(output_transform = transform(1)),
+            "c50": CustomMAPE(output_transform = transform(2))
+        }
 
     def validation_step(self, batch, batch_idx: int):
         """Compute validation area under the ROC curve
@@ -338,8 +340,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         preds = y_pred[:, warm_up_left : num_frames - warm_up_right : 10]
         target = y[:, warm_up_left : num_frames - warm_up_right : 10]
 
-        # for now we keep AUROC on VAD as validation metric
-        self.model.validation_metric(
+        output = self.model.validation_metric(
             preds,
             target.int(),
         )
@@ -352,16 +353,20 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             logger=True,
         )
 
-        metrics = self.detailed_validation_metrics(preds, target.int())
-        for validation, val_type in zip(metrics, ['vad', 'snr', 'c50']):
-            self.model.log( 
-                f"{self.logging_prefix}{val_type}Metric",
-                validation,
-                on_step=False,
-                on_epoch=True,
-                prog_bar=True,
-                logger=True,
-            )
+        validation = (
+            (1 - output[f"{self.logging_prefix}vad"]) \
+            + output[f"{self.logging_prefix}snr"] \
+            + output[f"{self.logging_prefix}c50"] \
+        ) / 3
+
+        self.model.log(
+            f"{self.logging_prefix}ValidationMetric",
+            validation,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
 
     def training_step(self, batch, batch_idx: int):
         """Training step according specific to RegressiveActivityDetectionTask
