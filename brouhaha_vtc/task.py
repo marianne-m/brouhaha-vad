@@ -305,13 +305,13 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
     def default_metric(
         self,
     ) -> Union[Metric, Sequence[Metric], Dict[str, Metric]]:
-        """Returns average of AUROC for VAD, MSE on snr regression and MSE on c50 regression"""
+        """Returns the three validation metric"""
         def transform(index):
             return lambda preds, target: (preds[:,:,index].reshape(-1), target[:,:,index].reshape(-1))
         return {
-            "vad": CustomAUROC(output_transform = transform(0)),
-            "snr": CustomMAPE(output_transform = transform(1)),
-            "c50": CustomMAPE(output_transform = transform(2))
+            "vadValMetric": CustomAUROC(output_transform = transform(0)),
+            "snrValMetric": CustomMAPE(output_transform = transform(1)),
+            "c50ValMetric": CustomMAPE(output_transform = transform(2))
         }
 
     def validation_step(self, batch, batch_idx: int):
@@ -354,9 +354,9 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         )
 
         validation = (
-            (1 - output[f"{self.logging_prefix}vad"]) \
-            + output[f"{self.logging_prefix}snr"] \
-            + output[f"{self.logging_prefix}c50"] \
+            (1 - output[f"{self.logging_prefix}vadValMetric"]) \
+            + output[f"{self.logging_prefix}snrValMetric"] \
+            + output[f"{self.logging_prefix}c50ValMetric"] \
         ) / 3
 
         self.model.log(
