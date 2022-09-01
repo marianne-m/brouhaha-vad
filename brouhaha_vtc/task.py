@@ -1,12 +1,13 @@
 import itertools
 from re import T
 
-from typing import Dict, Sequence, Text, Tuple, Union
+from typing import Dict, Optional, Sequence, Text, Tuple, Union
 
 import torch
 from pyannote.database import Protocol
 from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
-from torchmetrics import Metric, MeanSquaredError
+from torchmetrics import AUROC, Metric, MeanAbsolutePercentageError, MetricCollection
+import torchmetrics.functional as F
 
 from pyannote.audio.core.task import Problem, Resolution, Specifications, Task
 from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
@@ -19,6 +20,37 @@ from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
 
 import numpy as np
 
+class CustomMAPE(Metric):
+    higher_is_better: Optional[bool] = False
+    full_state_update: Optional[bool] = False
+    def __init__(self, output_transform=None):
+        super().__init__()
+        self.output_transform = output_transform
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        assert preds.shape == target.shape
+
+        preds, target = self.output_transform(preds, target)
+        self.mape = F.mean_absolute_percentage_error(preds, target)
+
+    def compute(self):
+        return self.mape
+
+class CustomAUROC(Metric):
+    higher_is_better: Optional[bool] = True
+    full_state_update: Optional[bool] = False
+    def __init__(self, output_transform=None):
+        super().__init__()
+        self.output_transform = output_transform
+
+    def update(self, preds: torch.Tensor, target: torch.Tensor):
+        assert preds.shape == target.shape
+
+        preds, target = self.output_transform(preds, target)
+        self.auroc = F.auroc(preds, target)
+
+    def compute(self):
+        return self.auroc
 
 
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
@@ -118,10 +150,12 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         Y = np.zeros((batch_size, num_frames, num_labels + 2))
 
         for i, b in enumerate(batch):
+            data = np.where(np.isinf(b["y"].data), 100, b["y"].data)
+            data = np.where(np.isnan(data), 100, data)
             for local_idx, label in enumerate(b["y"].labels):
                 global_idx = labels.index(label)
                 Y[i, :, global_idx] = b["y"].data[:, local_idx]
-            Y[i, :, -2:] = b["y"].data[:, -2:]
+            Y[i, :, -2:] = data[:, -2:]
 
         return torch.from_numpy(Y)
 
@@ -267,7 +301,19 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         loss = loss_vad + lambda_1 * loss_snr + lambda_2 * loss_c50
 
         return loss, loss_vad, loss_snr, loss_c50
-    
+
+    def default_metric(
+        self,
+    ) -> Union[Metric, Sequence[Metric], Dict[str, Metric]]:
+        """Returns the three validation metric"""
+        def transform(index):
+            return lambda preds, target: (preds[:,:,index].reshape(-1), target[:,:,index].reshape(-1))
+        return {
+            "vadValMetric": CustomAUROC(output_transform = transform(0)),
+            "snrValMetric": CustomMAPE(output_transform = transform(1)),
+            "c50ValMetric": CustomMAPE(output_transform = transform(2))
+        }
+
     def validation_step(self, batch, batch_idx: int):
         """Compute validation area under the ROC curve
 
@@ -294,14 +340,28 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         preds = y_pred[:, warm_up_left : num_frames - warm_up_right : 10]
         target = y[:, warm_up_left : num_frames - warm_up_right : 10]
 
-        # for now we keep AUROC on VAD as validation metric
-        self.model.validation_metric(
-            preds[:,:,0].reshape(-1),
-            target[:,:,0].reshape(-1).int(),
+        output = self.model.validation_metric(
+            preds,
+            target.int(),
         )
 
         self.model.log_dict(
             self.model.validation_metric,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+
+        validation = (
+            (1 - output[f"{self.logging_prefix}vadValMetric"]) \
+            + output[f"{self.logging_prefix}snrValMetric"] \
+            + output[f"{self.logging_prefix}c50ValMetric"] \
+        ) / 3
+
+        self.model.log(
+            f"{self.logging_prefix}ValidationMetric",
+            validation,
             on_step=False,
             on_epoch=True,
             prog_bar=True,
