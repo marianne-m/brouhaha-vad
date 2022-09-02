@@ -6,7 +6,7 @@ from typing import Dict, Optional, Sequence, Text, Tuple, Union
 import torch
 from pyannote.database import Protocol
 from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
-from torchmetrics import AUROC, Metric, MeanAbsolutePercentageError, MetricCollection
+from torchmetrics import Metric
 import torchmetrics.functional as F
 
 from pyannote.audio.core.task import Problem, Resolution, Specifications, Task
@@ -14,43 +14,15 @@ from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
 from pyannote.audio.core.io import AudioFile
 from pyannote.core import Segment, SlidingWindowFeature
 
+from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError
+
 
 
 from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
 
 import numpy as np
 
-class CustomMAPE(Metric):
-    higher_is_better: Optional[bool] = False
-    full_state_update: Optional[bool] = False
-    def __init__(self, output_transform=None):
-        super().__init__()
-        self.output_transform = output_transform
 
-    def update(self, preds: torch.Tensor, target: torch.Tensor):
-        assert preds.shape == target.shape
-
-        preds, target = self.output_transform(preds, target)
-        self.mape = F.mean_absolute_percentage_error(preds, target)
-
-    def compute(self):
-        return self.mape
-
-class CustomAUROC(Metric):
-    higher_is_better: Optional[bool] = True
-    full_state_update: Optional[bool] = False
-    def __init__(self, output_transform=None):
-        super().__init__()
-        self.output_transform = output_transform
-
-    def update(self, preds: torch.Tensor, target: torch.Tensor):
-        assert preds.shape == target.shape
-
-        preds, target = self.output_transform(preds, target)
-        self.auroc = F.auroc(preds, target)
-
-    def compute(self):
-        return self.auroc
 
 
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
@@ -86,6 +58,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         pin_memory: bool = False,
         augmentation: BaseWaveformTransform = None,
         metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
+        max_error_snr: int = 40,
+        max_error_c50: int = 70,
     ):
 
         super().__init__(
@@ -105,6 +79,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_loss_c50 = 1
         self.first_losses_c50 = []
         self.first_losses_snr = []
+        self.max_error_snr = max_error_snr
+        self.max_error_c50 = max_error_c50
 
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
@@ -306,12 +282,14 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self,
     ) -> Union[Metric, Sequence[Metric], Dict[str, Metric]]:
         """Returns the three validation metric"""
+
         def transform(index):
             return lambda preds, target: (preds[:,:,index].reshape(-1), target[:,:,index].reshape(-1))
+
         return {
-            "vadValMetric": CustomAUROC(output_transform = transform(0)),
-            "snrValMetric": CustomMAPE(output_transform = transform(1)),
-            "c50ValMetric": CustomMAPE(output_transform = transform(2))
+            "vadValMetric": CustomAUROC(output_transform=transform(0)),
+            "snrValMetric": CustomMeanAbsoluteError(output_transform=transform(1), mask=True),
+            "c50ValMetric": CustomMeanAbsoluteError(output_transform=transform(2))
         }
 
     def validation_step(self, batch, batch_idx: int):
@@ -342,7 +320,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         output = self.model.validation_metric(
             preds,
-            target.int(),
+            target,
         )
 
         self.model.log_dict(
@@ -355,8 +333,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         validation = (
             (1 - output[f"{self.logging_prefix}vadValMetric"]) \
-            + output[f"{self.logging_prefix}snrValMetric"] \
-            + output[f"{self.logging_prefix}c50ValMetric"] \
+            + output[f"{self.logging_prefix}snrValMetric"] / self.max_error_snr \
+            + output[f"{self.logging_prefix}c50ValMetric"] / self.max_error_c50 \
         ) / 3
 
         self.model.log(
