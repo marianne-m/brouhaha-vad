@@ -291,9 +291,9 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         """
         lambda_1 = 1
         lambda_2 = 1
-        loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0], weight=weight)
-        loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight)
-        loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight)
+        loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0])
+        loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=target[:,:,0].unsqueeze(dim=2))
+        loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2])
 
         loss_snr = loss_snr / self.first_loss_snr
         loss_c50 = loss_c50 / self.first_loss_c50
