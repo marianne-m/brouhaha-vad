@@ -166,10 +166,12 @@ class TrainCommand(BaseCommand):
                           'logger': logger,
                           'max_epochs': args.epoch}
         if args.resume:
-            trainer_kwargs["resume_from_checkpoint"] = checkpoints_path / "last.ckpt"
+            ckpt_path = checkpoints_path / "last.ckpt"
+        else:
+            ckpt_path = None
 
         trainer = Trainer(**trainer_kwargs)
-        trainer.fit(model)
+        trainer.fit(model, ckpt_path=ckpt_path)
 
 
 class TuneCommand(BaseCommand):
