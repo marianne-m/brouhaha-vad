@@ -1,4 +1,7 @@
-from typing import Dict, Optional, Sequence, Text, Tuple, Union
+from typing import Dict, Optional, Sequence, Text, Tuple, Union, Any, Callable, List
+from numbers import Number
+
+from torchmetrics.functional.classification.f_beta import _safe_divide
 
 import torch
 from torchmetrics import Metric
