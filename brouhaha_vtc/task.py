@@ -225,6 +225,12 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_loss_snr = max(self.first_losses_snr)
         self.first_loss_c50 = max(self.first_losses_c50)
 
+        first_losses = {"snr": self.first_loss_snr,
+                        "c50": self.first_loss_c50}
+
+        with open(self.model.logger.log_dir + "/first_losses.json", "w") as file:
+            json.dump(first_losses, file)
+
 
     def default_loss(
         self, specifications: Specifications, target, prediction, weight=None
@@ -395,6 +401,13 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         # set first loss for snr and c50
         if self.model.current_epoch == 0 and batch_idx < 10:
             self.set_first_losses(self.specifications, y, y_pred, weight=weight)
+
+        # retrieve first losses if resuming training
+        if not self.first_loss_snr:
+            with open(self.model.logger.log_dir + "/first_losses.json", "r") as file:
+                first_losses = json.load(file)
+            self.first_loss_snr = first_losses['snr']
+            self.first_loss_c50 = first_losses['c50']
 
         # compute loss
         losses = self.default_loss(self.specifications, y, y_pred, weight=weight)
