@@ -4,6 +4,7 @@ from re import T
 from typing import Dict, Optional, Sequence, Text, Tuple, Union
 
 import torch
+import json
 from pyannote.database import Protocol
 from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
 from torchmetrics import Metric
@@ -75,8 +76,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         self.balance = balance
         self.weight = weight
-        self.first_loss_snr = 1
-        self.first_loss_c50 = 1
+        self.first_loss_snr = None
+        self.first_loss_c50 = None
         self.first_losses_c50 = []
         self.first_losses_snr = []
         self.max_error_snr = max_error_snr
