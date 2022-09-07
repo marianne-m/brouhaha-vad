@@ -14,7 +14,7 @@ from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
 from pyannote.audio.core.io import AudioFile
 from pyannote.core import Segment, SlidingWindowFeature
 
-from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError
+from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError, OptimalFScore, OptimalFScoreThreshold
 
 
 
@@ -287,9 +287,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             return lambda preds, target: (preds[:,:,index].reshape(-1), target[:,:,index].reshape(-1))
 
         return {
-            "vadValMetric": CustomAUROC(output_transform=transform(0)),
             "snrValMetric": CustomMeanAbsoluteError(output_transform=transform(1), mask=True),
-            "c50ValMetric": CustomMeanAbsoluteError(output_transform=transform(2))
+            "c50ValMetric": CustomMeanAbsoluteError(output_transform=transform(2)),
+            "vadValMetric": OptimalFScore(output_transform=transform(0)),
+            "vadOptiTh": OptimalFScoreThreshold(output_transform=transform(0))
         }
 
     def validation_step(self, batch, batch_idx: int):
