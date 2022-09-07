@@ -149,7 +149,7 @@ class OptimalFScore(Metric):
         """
         if self.output_transform:
             preds, target = self.output_transform(preds, target)
-        tp, tn, fp, fn = stat_scores(preds, target, threshold=self.threshold)
+        tp, fp, tn, fn = stat_scores(preds, target, threshold=self.threshold)
     
         self.tp += tp
         self.tn += tn
