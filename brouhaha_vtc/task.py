@@ -21,6 +21,7 @@ from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError, OptimalFScore, 
 from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
 
 import numpy as np
+import json
 
 
 
@@ -346,6 +347,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             prog_bar=True,
             logger=True,
         )
+
+        with open(self.model.logger.log_dir + "/vad_fscore_threshold.json", "w") as file:
+            json.dump({"optimal_threshold" : float(output[f"{self.logging_prefix}vadOptiTh"])}, file)
+
 
     def training_step(self, batch, batch_idx: int):
         """Training step according specific to RegressiveActivityDetectionTask
