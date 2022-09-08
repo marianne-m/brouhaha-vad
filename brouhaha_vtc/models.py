@@ -64,6 +64,9 @@ class CustomActivation(nn.Module):
 
 class RegressiveSegmentationModelMixin(Model):
     def build(self):
+        """
+        Debug architecture
+        """
         self.classifier = CustomClassifier(32 * 2, len(self.specifications.classes))
         self.activation = CustomActivation()
     
