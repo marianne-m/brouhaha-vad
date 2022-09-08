@@ -92,10 +92,10 @@ class BaseCommand:
         return get_protocol(args.protocol, preprocessors=preprocessors)
 
     @classmethod
-    def get_task(cls, args: Namespace):
+    def get_task(cls, args: Namespace, task_kwargs: Dict):
         protocol = cls.get_protocol(args)
         protocol.data_dir = Path(args.data_dir)
-        task = RegressiveActivityDetectionTask(protocol, duration=2.00, num_workers=0)
+        task = RegressiveActivityDetectionTask(protocol, num_workers=8, **task_kwargs)
         task.setup()
         return task
 
@@ -112,7 +112,7 @@ class BaseCommand:
         
         print("Using a custom config file to instantiate the model")
 
-        return config["architecture"]["params"]
+        return config["architecture"]["params"], config["task"]["params"]
 
 
 class TrainCommand(BaseCommand):
@@ -146,11 +146,11 @@ class TrainCommand(BaseCommand):
     @classmethod
     def run(cls, args: Namespace):
 
-        model_kwargs = dict()
+        model_kwargs, task_kwargs = dict(), dict()
         if args.config:
-            model_kwargs = cls.get_config(args)
+            model_kwargs, task_kwargs = cls.get_config(args)
  
-        vad = cls.get_task(args)
+        vad = cls.get_task(args, task_kwargs)
 
         if args.model_type == "simple":
             model = CustomSimpleSegmentationModel(task=vad)
