@@ -59,26 +59,22 @@ To do so, put a `config.yaml` in your experimental directory, as the following o
 
 ```
 task:
-  params:
-    duration: 2.0
-    batch_size: 64
-  name: MultilabelDetection
+  duration: 2.0
+  batch_size: 64
 architecture:
-  params:
-    sincnet:
-      stride: 10
-      sample_rate: 16000
-    lstm:
-      hidden_size: 264
-      num_layers: 2
-      bidirectional: true
-      monolithic: true
-      dropout: 0.0
-      batch_first: true
-    linear:
-      hidden_size: 128
-      num_layers: 2
-  name: pyannote.audio.models.PyanNet
+  sincnet:
+    stride: 10
+    sample_rate: 16000
+  lstm:
+    hidden_size: 264
+    num_layers: 2
+    bidirectional: true
+    monolithic: true
+    dropout: 0.0
+    batch_first: true
+  linear:
+    hidden_size: 128
+    num_layers: 2
 ```
 
 And use the `--config` command when launching the training :

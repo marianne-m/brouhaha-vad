@@ -112,7 +112,7 @@ class BaseCommand:
         
         print("Using a custom config file to instantiate the model")
 
-        return config["architecture"]["params"], config["task"]["params"]
+        return config["architecture"], config["task"]
 
 
 class TrainCommand(BaseCommand):
