@@ -6,6 +6,7 @@ from typing import Dict, List, Any
 
 import torch
 import yaml
+from yaml.loader import SafeLoader
 import pandas as pd
 from pyannote.audio import Model
 from pyannote.audio.models.segmentation import PyanNet
@@ -91,12 +92,27 @@ class BaseCommand:
         return get_protocol(args.protocol, preprocessors=preprocessors)
 
     @classmethod
-    def get_task(cls, args: Namespace):
+    def get_task(cls, args: Namespace, task_kwargs: Dict):
         protocol = cls.get_protocol(args)
         protocol.data_dir = Path(args.data_dir)
-        task = RegressiveActivityDetectionTask(protocol, duration=2.00, num_workers=0)
+        task = RegressiveActivityDetectionTask(protocol, num_workers=8, **task_kwargs)
         task.setup()
         return task
+
+    @classmethod 
+    def get_config(cls, args:Namespace):
+        config_file = args.exp_dir / "config.yaml"
+        try:
+            with open(config_file) as f:
+                config = yaml.load(f, Loader=SafeLoader)
+        except FileNotFoundError:
+            print(f"The config file {config_file} was not found in {args.exp_dir}.\n"
+                  f"If using the --config option, please place a config.yaml file in {args.exp_dir}")
+            raise
+        
+        print("Using a custom config file to instantiate the model")
+
+        return config["architecture"], config["task"]
 
 
 class TrainCommand(BaseCommand):
@@ -122,16 +138,24 @@ class TrainCommand(BaseCommand):
                             help="Path to the data directory")
         parser.add_argument("--gpu", type=int, default=1,
                             help="Number of gpu. Default 1.")
+        parser.add_argument("--config", default=False, action="store_true",
+                            help="If used, the model use the config.yml into the experimental"
+                                 "folder to instantiate the model. Else, the default parameters"
+                                 "are used.")
 
     @classmethod
     def run(cls, args: Namespace):
 
-        vad = cls.get_task(args)
+        model_kwargs, task_kwargs = dict(), dict()
+        if args.config:
+            model_kwargs, task_kwargs = cls.get_config(args)
+ 
+        vad = cls.get_task(args, task_kwargs)
 
         if args.model_type == "simple":
             model = CustomSimpleSegmentationModel(task=vad)
         else:
-            model = CustomPyanNetModel(task=vad)
+            model = CustomPyanNetModel(task=vad, **model_kwargs)
 
         value_to_monitor, min_or_max = vad.val_monitor
 
