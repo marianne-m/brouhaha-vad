@@ -4,7 +4,7 @@ from re import T
 from typing import Dict, Optional, Sequence, Text, Tuple, Union
 
 import torch
-import json
+import yaml
 from pyannote.database import Protocol
 from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
 from torchmetrics import Metric
@@ -229,8 +229,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         first_losses = {"snr": self.first_loss_snr,
                         "c50": self.first_loss_c50}
 
-        with open(self.model.logger.log_dir + "/first_losses.json", "w") as file:
-            json.dump(first_losses, file)
+        with open(self.model.logger.log_dir + "/first_losses.yaml", "w") as file:
+            yaml.dump(first_losses, file)
 
 
     def default_loss(
@@ -405,8 +405,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         # retrieve first losses if resuming training
         if not self.first_loss_snr:
-            with open(self.model.logger.log_dir + "/first_losses.json", "r") as file:
-                first_losses = json.load(file)
+            with open(self.model.logger.log_dir + "/first_losses.yaml", "r") as file:
+                first_losses = yaml.load(file, Loader=yaml.loader.SafeLoader)
             self.first_loss_snr = first_losses['snr']
             self.first_loss_c50 = first_losses['c50']
 
