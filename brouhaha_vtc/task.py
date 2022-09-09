@@ -132,12 +132,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         Y = np.zeros((batch_size, num_frames, num_labels + 2))
 
         for i, b in enumerate(batch):
-            data = np.where(np.isinf(b["y"].data), 100, b["y"].data)
-            data = np.where(np.isnan(data), 100, data)
             for local_idx, label in enumerate(b["y"].labels):
                 global_idx = labels.index(label)
                 Y[i, :, global_idx] = b["y"].data[:, local_idx]
-            Y[i, :, -2:] = data[:, -2:]
+            Y[i, :, -2:] = b["y"].data[:, -2:]
 
         return torch.from_numpy(Y)
 
