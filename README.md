@@ -34,7 +34,7 @@ Define your database in the `~/.pyannote/database.yml` file with this line :
 
 ```
 Databases:
-  Bouhaha: Path/to/your/database
+  Brouhaha: Path/to/your/database
 ```
 
 
@@ -66,7 +66,7 @@ architecture:
     stride: 10
     sample_rate: 16000
   lstm:
-    hidden_size: 264
+    hidden_size: 128
     num_layers: 2
     bidirectional: true
     monolithic: true
