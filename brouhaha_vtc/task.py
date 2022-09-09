@@ -15,13 +15,14 @@ from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
 from pyannote.audio.core.io import AudioFile
 from pyannote.core import Segment, SlidingWindowFeature
 
-from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError
+from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError, OptimalFScore, OptimalFScoreThreshold
 
 
 
 from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
 
 import numpy as np
+import yaml
 
 
 
@@ -294,9 +295,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             return lambda preds, target: (preds[:,:,index].reshape(-1), target[:,:,index].reshape(-1))
 
         return {
-            "vadValMetric": CustomAUROC(output_transform=transform(0)),
             "snrValMetric": CustomMeanAbsoluteError(output_transform=transform(1), mask=True),
-            "c50ValMetric": CustomMeanAbsoluteError(output_transform=transform(2))
+            "c50ValMetric": CustomMeanAbsoluteError(output_transform=transform(2)),
+            "vadValMetric": OptimalFScore(output_transform=transform(0)),
+            "vadOptiTh": OptimalFScoreThreshold(output_transform=transform(0))
         }
 
     def validation_step(self, batch, batch_idx: int):
@@ -352,6 +354,13 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             prog_bar=True,
             logger=True,
         )
+
+        with open(self.model.logger.log_dir + "/vad_fscore_threshold.yaml", "a") as file:
+            optimal_th = {
+                f"epoch_{self.model.current_epoch}": float(output[f"{self.logging_prefix}vadOptiTh"])
+            }
+            yaml.dump(optimal_th, file)
+
 
     def training_step(self, batch, batch_idx: int):
         """Training step according specific to RegressiveActivityDetectionTask
