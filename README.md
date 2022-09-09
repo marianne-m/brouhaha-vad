@@ -34,7 +34,7 @@ Define your database in the `~/.pyannote/database.yml` file with this line :
 
 ```
 Databases:
-  Bouhaha: Path/to/your/database
+  Brouhaha: Path/to/your/database
 ```
 
 
