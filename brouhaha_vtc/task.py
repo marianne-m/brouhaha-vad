@@ -15,6 +15,8 @@ from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
 from pyannote.audio.core.io import AudioFile
 from pyannote.core import Segment, SlidingWindowFeature
 
+from brouhaha_vtc.models import C50_MAX, C50_MIN, SNR_MAX, SNR_MIN
+
 from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError, OptimalFScore, OptimalFScoreThreshold
 
 
@@ -25,6 +27,8 @@ import numpy as np
 import yaml
 
 
+MAX_ERROR_SNR = SNR_MAX - SNR_MIN
+MAX_ERROR_C50 = C50_MAX - C50_MIN
 
 
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
@@ -60,8 +64,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         pin_memory: bool = False,
         augmentation: BaseWaveformTransform = None,
         metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
-        max_error_snr: int = 40,
-        max_error_c50: int = 70,
+        max_error_snr: int = MAX_ERROR_SNR,
+        max_error_c50: int = MAX_ERROR_C50,
     ):
 
         super().__init__(
@@ -357,7 +361,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         with open(self.model.logger.log_dir + "/vad_fscore_threshold.yaml", "a") as file:
             optimal_th = {
-                f"epoch_{self.model.current_epoch}": float(output[f"{self.logging_prefix}vadOptiTh"])
+                f"epoch_{self.model.current_epoch}": {
+                    "fscore": float(output[f"{self.logging_prefix}vadValMetric"]),
+                    "optimal_th": float(output[f"{self.logging_prefix}vadOptiTh"])
+                }
             }
             yaml.dump(optimal_th, file)
 
