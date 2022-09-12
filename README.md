@@ -48,7 +48,7 @@ python main.py runs/brouhaha/ train \
     --classes brouhaha \
     --model_type pyannet \
     --epoch NB_OF_EPOCH_MAX \
-    --data_dir "path/to/your/database"
+    --data_dir "path/to/your/database/*/audio_16k/{uri}.flac"
 ```
 
 #### Use a config.yaml
