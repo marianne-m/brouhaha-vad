@@ -198,51 +198,6 @@ class TrainCommand(BaseCommand):
         trainer.fit(model, ckpt_path=ckpt_path)
 
 
-class TuneCommand(BaseCommand):
-    COMMAND = "tune"
-    DESCRIPTION = "tune the model hyperparameters using optuna"
-
-    @classmethod
-    def init_parser(cls, parser: ArgumentParser):
-        parser.add_argument("-p", "--protocol", type=str,
-                            default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
-                            help="Pyannote database")
-        parser.add_argument("--classes", choices=CLASSES.keys(),
-                            required=True,
-                            type=str, help="Model model checkpoint")
-        parser.add_argument("-m", "--model_path", type=Path, required=True,
-                            help="Model checkpoint to tune pipeline with")
-        parser.add_argument("-nit", "--n_iterations", type=int, default=50,
-                            help="Number of tuning iterations")
-        parser.add_argument("--metric", choices=["fscore", "ier"],
-                            default="fscore")
-        parser.add_argument("--params", type=Path, default=Path("best_params.yml"),
-                            help="Filename for param yaml file")
-
-    @classmethod
-    def run(cls, args: Namespace):
-        protocol = cls.get_protocol(args)
-        model = Model.from_pretrained(
-            Path(args.model_path),
-            strict=False,
-        )
-        # Dirty fix for the non-serialization of the task params
-        pipeline = MultilabelDetectionPipeline(segmentation=model,
-                                               fscore=args.metric == "fscore")
-        # pipeline.instantiate(pipeline.default_parameters())
-        validation_files = list(protocol.development())
-        optimizer = Optimizer(pipeline)
-        optimizer.tune(validation_files,
-                       n_iterations=args.n_iterations,
-                       show_progress=True)
-        best_params = optimizer.best_params
-        logging.info(f"Best params: \n{best_params}")
-        params_filepath: Path = args.exp_dir / args.params
-        logging.info(f"Saving params to {params_filepath}")
-        pipeline.instantiate(best_params)
-        pipeline.dump_params(params_filepath)
-
-
 class ApplyCommand(BaseCommand):
     COMMAND = "apply"
     DESCRIPTION = "apply the model on some data"
@@ -331,7 +286,7 @@ class ScoreCommand(BaseCommand):
             df.to_csv(args.report_path)
 
 
-commands = [TrainCommand, TuneCommand, ApplyCommand, ScoreCommand]
+commands = [TrainCommand, ApplyCommand, ScoreCommand]
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument("-v", "--verbose", action="store_true",
