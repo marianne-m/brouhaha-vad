@@ -62,13 +62,11 @@ class RegressiveActivityDetectionPipeline(Pipeline):
     def __init__(
         self,
         segmentation: PipelineModel = None,
-        fscore: bool = False,
         **inference_kwargs,
     ):
         super().__init__()
 
         self.segmentation = segmentation
-        self.fscore = fscore
 
         # load model and send it to GPU (when available and not already on GPU)
         model = get_model(segmentation)
@@ -181,12 +179,4 @@ class RegressiveActivityDetectionPipeline(Pipeline):
     def get_metric(self) -> Union[DetectionErrorRate, DetectionPrecisionRecallFMeasure]:
         """Return new instance of detection metric"""
 
-        if self.fscore:
-            return DetectionPrecisionRecallFMeasure(collar=0.0, skip_overlap=False)
-
-        return DetectionErrorRate(collar=0.0, skip_overlap=False)
-
-    def get_direction(self):
-        if self.fscore:
-            return "maximize"
-        return "minimize"
+        return DetectionPrecisionRecallFMeasure(collar=0.0, skip_overlap=False)
