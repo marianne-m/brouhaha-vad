@@ -26,6 +26,7 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
 from brouhaha_vtc.models import CustomPyanNetModel, CustomSimpleSegmentationModel
+from brouhaha_vtc.pipeline import RegressiveActivityDetectionPipeline
 
 from brouhaha_vtc.task import RegressiveActivityDetectionTask
 
@@ -216,26 +217,45 @@ class ApplyCommand(BaseCommand):
                             help="Path to best params. Default to EXP_DIR/best_params.yml")
         parser.add_argument("--apply_folder", type=Path,
                             help="Path to apply folder")
+        parser.add_argument("--data_dir", type=str, required=True,
+                            help="Path to the data directory")
 
     @classmethod
     def run(cls, args: Namespace):
         protocol = cls.get_protocol(args)
+        protocol.data_dir = Path(args.data_dir)
         model = Model.from_pretrained(
             Path(args.model_path),
             strict=False,
         )
-        pipeline = MultilabelDetectionPipeline(segmentation=model)
-        params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
-        pipeline.load_params(params_path)
+        pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
+        epoch = 3 #TODO get epoch from model name
+        # pipeline.get_parameters(file, epoch)
         apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
         apply_folder.mkdir(parents=True, exist_ok=True)
 
+        rttm_folder = apply_folder / "rttm_files"
+        snr_folder = apply_folder / "detailed_snr_labels"
+        c50_folder = apply_folder / "c50"
+
+        rttm_folder.mkdir(parents=True, exist_ok=True)
+        snr_folder.mkdir(parents=True, exist_ok=True)
+        c50_folder.mkdir(parents=True, exist_ok=True)
+
         for file in tqdm(list(protocol.test())):
             logging.info(f"Inference for file {file['uri']}")
-            annotation: Annotation = pipeline(file)
-            with open(apply_folder / (file["uri"].replace("/", "_") + ".rttm"), "w") as rttm_file:
+            inference = pipeline(file)
+            annotation: Annotation = inference["annotation"]
+            snr = inference["snr"]
+            c50 = inference["c50"]
+            with open(rttm_folder / (file["uri"].replace("/", "_") + ".rttm"), "w") as rttm_file:
                 annotation.write_rttm(rttm_file)
-
+            with open(snr_folder / (file["uri"].replace("/", "_") + ".txt"), "w") as snr_file:
+                for score in snr:
+                    snr_file.write(f"{score}\n")
+            with open(c50_folder / (file["uri"].replace("/", "_") + ".txt"), "w") as snr_file:
+                for score in snr:
+                    snr_file.write(f"{score}\n")
 
 class ScoreCommand(BaseCommand):
     COMMAND = "score"
