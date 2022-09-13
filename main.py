@@ -254,8 +254,10 @@ class ApplyCommand(BaseCommand):
                 for score in snr:
                     snr_file.write(f"{score}\n")
             with open(c50_folder / (file["uri"].replace("/", "_") + ".txt"), "w") as snr_file:
-                for score in snr:
+                for score in c50:
                     snr_file.write(f"{score}\n")
+            with open(apply_folder / "reverb_labels.txt", "a") as label_file:
+                label_file.write(f"{file['uri']} {np.mean(c50)}\n")
 
 class ScoreCommand(BaseCommand):
     COMMAND = "score"
