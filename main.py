@@ -279,21 +279,25 @@ class ScoreCommand(BaseCommand):
                             help="Model model checkpoint")
         parser.add_argument("--report_path", type=Path, required=True,
                             help="Path to report csv")
+        parser.add_argument("--data_dir", type=str, required=True,
+                            help="Path to the data directory")
 
     @classmethod
     def run(cls, args: Namespace):
         protocol = cls.get_protocol(args)
+        protocol.data_dir = Path(args.data_dir)
+
         apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
+        rttm_folder = apply_folder / "rttm_files"
         annotations: Dict[str, Annotation] = {}
-        for filepath in apply_folder.glob("*.rttm"):
+        for filepath in rttm_folder.glob("*.rttm"):
             rttm_annots = load_rttm(filepath)
             annotations.update(rttm_annots)
         model = Model.from_pretrained(
             Path(args.model_path),
             strict=False,
         )
-        pipeline = MultilabelDetectionPipeline(segmentation=model,
-                                               fscore=args.metric == "fscore")
+        pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
         metric: BaseMetric = pipeline.get_metric()
 
         for file in protocol.test():
