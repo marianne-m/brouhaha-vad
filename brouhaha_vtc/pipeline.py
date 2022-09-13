@@ -173,7 +173,7 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         c50_labels = segmentations.data[:, 2]
 
         return {
-            "annotation": speech.rename_labels({label: "SPEECH" for label in speech.labels()}),
+            "annotation": speech.rename_labels({label: "A" for label in speech.labels()}),
             "snr": snr_labels,
             "c50": c50_labels
         }
