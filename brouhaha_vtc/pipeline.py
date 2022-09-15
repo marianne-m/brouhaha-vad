@@ -24,6 +24,7 @@ from pyannote.audio.pipelines.utils import (
 )
 from pyannote.audio.tasks import VoiceActivityDetection as VoiceActivityDetectionTask
 from pyannote.audio.utils.signal import Binarize
+from pyannote.audio.utils.loss import mse_loss
 from pyannote.core import Annotation, SlidingWindowFeature
 from pyannote.database.protocol import SpeakerDiarizationProtocol
 from pyannote.metrics.detection import (
@@ -179,4 +180,8 @@ class RegressiveActivityDetectionPipeline(Pipeline):
     def get_metric(self) -> Union[DetectionErrorRate, DetectionPrecisionRecallFMeasure]:
         """Return new instance of detection metric"""
 
-        return DetectionPrecisionRecallFMeasure(collar=0.0, skip_overlap=False)
+        return {
+            "vadTestMetric": DetectionPrecisionRecallFMeasure(collar=0.0, skip_overlap=False),
+            "snrTestMetric": mse_loss,
+            "c50TestMetric": mse_loss
+        }

@@ -8,12 +8,13 @@ import torch
 import yaml
 from yaml.loader import SafeLoader
 import pandas as pd
+import numpy as np
 from pyannote.audio import Model
 from pyannote.audio.models.segmentation import PyanNet
 from pyannote.audio.models.segmentation.debug import SimpleSegmentationModel
 # from pyannote.audio.pipelines import MultiLabelSegmentation as MultilabelDetectionPipeline
 # from pyannote.audio.tasks.segmentation.multilabel import MultiLabelSegmentation
-from pyannote.core import Annotation
+from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature
 from pyannote.audio.utils.preprocessors import DeriveMetaLabels
 from pyannote.database import FileFinder, get_protocol, ProtocolFile
 from pyannote.database.protocol.protocol import Preprocessor
@@ -257,6 +258,7 @@ class ApplyCommand(BaseCommand):
             with open(apply_folder / "reverb_labels.txt", "a") as label_file:
                 label_file.write(f"{file['uri']} {np.mean(c50)}\n")
 
+
 class ScoreCommand(BaseCommand):
     COMMAND = "score"
     DESCRIPTION = "score some inference"
@@ -286,7 +288,11 @@ class ScoreCommand(BaseCommand):
         protocol.data_dir = Path(args.data_dir)
 
         apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
+
         rttm_folder = apply_folder / "rttm_files"
+        snr_folder = apply_folder / "detailed_snr_labels"
+        c50_file = apply_folder / "reverb_labels.txt"
+
         annotations: Dict[str, Annotation] = {}
         for filepath in rttm_folder.glob("*.rttm"):
             rttm_annots = load_rttm(filepath)
@@ -298,13 +304,56 @@ class ScoreCommand(BaseCommand):
         pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
         metric: BaseMetric = pipeline.get_metric()
 
-        for file in protocol.test():
-            if file["uri"] not in annotations:
-                continue
-            inference = annotations[file["uri"]]
-            metric(file["annotation"], inference, file["annotated"])
+        snr_test_metric = []
+        c50_test_metric = []
+        c50_df = pd.read_csv(c50_file, sep=" ", header=None)
+        c50 = {key: val for key, val in zip(c50_df[0], c50_df   [1])}
+        print(annotations)
 
-        df: pd.DataFrame = metric.report(display=True)
+        for file in protocol.test():
+            print(file["uri"])
+            if file["uri"] not in annotations.keys():
+                continue
+            # score vad
+            inference = annotations[file["uri"]]
+            metric["vadTestMetric"](file["annotation"], inference, file["annotated"])
+
+            # score snr
+            # get predicted snr
+            snr_preds_file = str(snr_folder / file['uri']) + ".npy"
+            preds_array = np.load(snr_preds_file)
+            preds_array = np.expand_dims(preds_array, axis=1)
+
+            resolution = file['annotated'][0].duration / preds_array.shape[0]
+            sliding_window = SlidingWindow(
+                start=0, step=resolution, duration=resolution
+            )
+            preds = SlidingWindowFeature(preds_array, sliding_window)
+
+            # get target snr
+            target = file['target_features']['snr']
+            target = target.align(to=preds)
+
+            # get target annotation to mask snr
+            annot = file["annotation"].discretize(
+                support=file['annotated'][0], resolution=resolution, duration=file['annotated'][0].duration
+            )
+
+            mse_score = metric["snrTestMetric"](torch.tensor(preds.data), torch.tensor(target.data), weight=torch.tensor(annot.data))
+            snr_test_metric.append(mse_score)
+
+            # score c50
+            c50_pred = c50[file["uri"]]
+            c50_target = file["target_features"]["c50"]
+
+            c50_test_metric.append(metric["c50TestMetric"](torch.tensor(c50_pred), torch.tensor(c50_target)))
+
+        print("snr_test_metric : ", snr_test_metric)
+        print(np.mean(snr_test_metric))
+        print("c50_test_metric : ", c50_test_metric)
+        print(np.mean(c50_test_metric))
+
+        df: pd.DataFrame = metric["vadTestMetric"].report(display=True)
         if args.report_path is not None:
             args.report_path.parent.mkdir(parents=True, exist_ok=True)
             df.to_csv(args.report_path)
