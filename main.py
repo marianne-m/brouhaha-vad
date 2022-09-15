@@ -250,12 +250,10 @@ class ApplyCommand(BaseCommand):
             c50 = inference["c50"]
             with open(rttm_folder / (file["uri"].replace("/", "_") + ".rttm"), "w") as rttm_file:
                 annotation.write_rttm(rttm_file)
-            with open(snr_folder / (file["uri"].replace("/", "_") + ".txt"), "w") as snr_file:
-                for score in snr:
-                    snr_file.write(f"{score}\n")
-            with open(c50_folder / (file["uri"].replace("/", "_") + ".txt"), "w") as snr_file:
-                for score in c50:
-                    snr_file.write(f"{score}\n")
+            with open(snr_folder / (file["uri"].replace("/", "_") + ".npy"), "wb") as snr_file:
+                np.save(snr_file, snr)
+            with open(c50_folder / (file["uri"].replace("/", "_") + ".npy"), "wb") as c50_file:
+                np.save(c50_file, c50)
             with open(apply_folder / "reverb_labels.txt", "a") as label_file:
                 label_file.write(f"{file['uri']} {np.mean(c50)}\n")
 
