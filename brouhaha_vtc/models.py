@@ -12,6 +12,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+SNR_MIN = -15
+SNR_MAX = 80
+C50_MIN = -10
+C50_MAX = 60
+
+
 class ParametricSigmoid(nn.Module):
     def __init__(self, alpha: float, beta: float) -> None:
         super().__init__()
@@ -47,8 +53,8 @@ class CustomActivation(nn.Module):
         super().__init__()
         self.activations = nn.ModuleDict({
             'vad': nn.Sigmoid(),
-            'snr': ParametricSigmoid(30, -10),
-            'c50': ParametricSigmoid(60, -10),
+            'snr': ParametricSigmoid(SNR_MAX, SNR_MIN),
+            'c50': ParametricSigmoid(C50_MAX, C50_MIN),
         })
 
     def forward(self, x: torch.Tensor):

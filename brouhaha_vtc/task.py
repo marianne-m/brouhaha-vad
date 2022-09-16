@@ -15,6 +15,8 @@ from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
 from pyannote.audio.core.io import AudioFile
 from pyannote.core import Segment, SlidingWindowFeature
 
+from brouhaha_vtc.models import C50_MAX, C50_MIN, SNR_MAX, SNR_MIN
+
 from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError, OptimalFScore, OptimalFScoreThreshold
 
 
@@ -25,6 +27,8 @@ import numpy as np
 import yaml
 
 
+MAX_ERROR_SNR = SNR_MAX - SNR_MIN
+MAX_ERROR_C50 = C50_MAX - C50_MIN
 
 
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
@@ -60,8 +64,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         pin_memory: bool = False,
         augmentation: BaseWaveformTransform = None,
         metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
-        max_error_snr: int = 40,
-        max_error_c50: int = 70,
+        max_error_snr: int = MAX_ERROR_SNR,
+        max_error_c50: int = MAX_ERROR_C50,
+        lambda_c50: float=1,
+        lambda_snr: float=1
     ):
 
         super().__init__(
@@ -83,6 +89,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_losses_snr = []
         self.max_error_snr = max_error_snr
         self.max_error_c50 = max_error_c50
+        self.lambda_snr = lambda_snr
+        self.lambda_c50 = lambda_c50
 
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
@@ -128,12 +136,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         Y = np.zeros((batch_size, num_frames, num_labels + 2))
 
         for i, b in enumerate(batch):
-            data = np.where(np.isinf(b["y"].data), 100, b["y"].data)
-            data = np.where(np.isnan(data), 100, data)
             for local_idx, label in enumerate(b["y"].labels):
                 global_idx = labels.index(label)
                 Y[i, :, global_idx] = b["y"].data[:, local_idx]
-            Y[i, :, -2:] = data[:, -2:]
+            Y[i, :, -2:] = b["y"].data[:, -2:]
 
         return torch.from_numpy(Y)
 
@@ -273,8 +279,6 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             Mean Square Error normalized by the first value
 
         """
-        lambda_1 = 1
-        lambda_2 = 1
         loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0])
         loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=target[:,:,0].unsqueeze(dim=2))
         loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2])
@@ -282,7 +286,9 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         loss_snr = loss_snr / self.first_loss_snr
         loss_c50 = loss_c50 / self.first_loss_c50
 
-        loss = loss_vad + lambda_1 * loss_snr + lambda_2 * loss_c50
+        loss = loss_vad + \
+               + self.lambda_snr * loss_snr \
+               + self.lambda_c50 * loss_c50
 
         return loss, loss_vad, loss_snr, loss_c50
 
@@ -342,9 +348,9 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         validation = (
             (1 - output[f"{self.logging_prefix}vadValMetric"]) \
-            + output[f"{self.logging_prefix}snrValMetric"] / self.max_error_snr \
-            + output[f"{self.logging_prefix}c50ValMetric"] / self.max_error_c50 \
-        ) / 3
+            + self.lambda_snr * output[f"{self.logging_prefix}snrValMetric"] / self.max_error_snr \
+            + self.lambda_c50 * output[f"{self.logging_prefix}c50ValMetric"] / self.max_error_c50 \
+        ) / (1 + self.lambda_snr + self.lambda_c50)
 
         self.model.log(
             f"{self.logging_prefix}ValidationMetric",
@@ -357,7 +363,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         with open(self.model.logger.log_dir + "/vad_fscore_threshold.yaml", "a") as file:
             optimal_th = {
-                f"epoch_{self.model.current_epoch}": float(output[f"{self.logging_prefix}vadOptiTh"])
+                f"epoch_{self.model.current_epoch}": {
+                    "fscore": float(output[f"{self.logging_prefix}vadValMetric"]),
+                    "optimal_th": float(output[f"{self.logging_prefix}vadOptiTh"])
+                }
             }
             yaml.dump(optimal_th, file)
 

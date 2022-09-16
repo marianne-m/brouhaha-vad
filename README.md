@@ -48,7 +48,7 @@ python main.py runs/brouhaha/ train \
     --classes brouhaha \
     --model_type pyannet \
     --epoch NB_OF_EPOCH_MAX \
-    --data_dir "path/to/your/database"
+    --data_dir "path/to/your/database/*/audio_16k/{uri}.flac"
 ```
 
 #### Use a config.yaml
@@ -66,7 +66,7 @@ architecture:
     stride: 10
     sample_rate: 16000
   lstm:
-    hidden_size: 264
+    hidden_size: 128
     num_layers: 2
     bidirectional: true
     monolithic: true
