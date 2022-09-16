@@ -304,16 +304,16 @@ class ScoreCommand(BaseCommand):
         pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
         metric: BaseMetric = pipeline.get_metric()
 
+        filenames = []
         snr_test_metric = []
         c50_test_metric = []
         c50_df = pd.read_csv(c50_file, sep=" ", header=None)
         c50 = {key: val for key, val in zip(c50_df[0], c50_df   [1])}
-        print(annotations)
 
         for file in protocol.test():
-            print(file["uri"])
             if file["uri"] not in annotations.keys():
                 continue
+            filenames.append(file["uri"])
             # score vad
             inference = annotations[file["uri"]]
             metric["vadTestMetric"](file["annotation"], inference, file["annotated"])
@@ -339,24 +339,27 @@ class ScoreCommand(BaseCommand):
                 support=file['annotated'][0], resolution=resolution, duration=file['annotated'][0].duration
             )
 
-            mse_score = metric["snrTestMetric"](torch.tensor(preds.data), torch.tensor(target.data), weight=torch.tensor(annot.data))
-            snr_test_metric.append(mse_score)
+            mse_snr = metric["snrTestMetric"](torch.tensor(preds.data), torch.tensor(target.data), weight=torch.tensor(annot.data))
+            snr_test_metric.append(float(mse_snr))
 
             # score c50
             c50_pred = c50[file["uri"]]
             c50_target = file["target_features"]["c50"]
 
-            c50_test_metric.append(metric["c50TestMetric"](torch.tensor(c50_pred), torch.tensor(c50_target)))
+            mse_c50 = metric["c50TestMetric"](torch.tensor(c50_pred), torch.tensor(c50_target))
+            c50_test_metric.append(float(mse_c50))
 
-        print("snr_test_metric : ", snr_test_metric)
-        print(np.mean(snr_test_metric))
-        print("c50_test_metric : ", c50_test_metric)
-        print(np.mean(c50_test_metric))
+        # totals for snr and c50
+        filenames.append("TOTAL")
+        snr_test_metric.append(np.mean(snr_test_metric))
+        c50_test_metric.append(np.mean(c50_test_metric))
 
-        df: pd.DataFrame = metric["vadTestMetric"].report(display=True)
+        df_fscore: pd.DataFrame = metric["vadTestMetric"].report(display=True)
+        df_snr_c50 = pd.DataFrame({"uri": filenames, "MSE(snr)": snr_test_metric, "MSE(c50)": c50_test_metric})
         if args.report_path is not None:
-            args.report_path.parent.mkdir(parents=True, exist_ok=True)
-            df.to_csv(args.report_path)
+            args.report_path.mkdir(parents=True, exist_ok=True)
+            df_fscore.to_csv(args.report_path / "fscore.csv")
+            df_snr_c50.to_csv(args.report_path / "snr_c50_scores.csv")
 
 
 commands = [TrainCommand, ApplyCommand, ScoreCommand]
