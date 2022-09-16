@@ -112,7 +112,9 @@ class BaseCommand:
         
         print("Using a custom config file to instantiate the model")
 
-        return config["architecture"], config["task"]
+        model_params = config["architecture"] if "architecture" in config else dict()
+        task_params = config["task"] if "task" in config else dict()
+        return model_params, task_params
 
 
 class TrainCommand(BaseCommand):
