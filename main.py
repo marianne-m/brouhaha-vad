@@ -220,6 +220,8 @@ class ApplyCommand(BaseCommand):
                             help="Path to apply folder")
         parser.add_argument("--data_dir", type=str, required=True,
                             help="Path to the data directory")
+        parser.add_argument("--set", type=str, default="test",
+                            help="Apply the model to this set. Possible values : dev, test, heldout. Default : test")
 
     @classmethod
     def run(cls, args: Namespace):
@@ -243,7 +245,12 @@ class ApplyCommand(BaseCommand):
         snr_folder.mkdir(parents=True, exist_ok=True)
         c50_folder.mkdir(parents=True, exist_ok=True)
 
-        for file in tqdm(list(protocol.test())):
+        set_iter = {
+            "dev": protocol.development(),
+            "test": protocol.test()
+        }
+
+        for file in tqdm(list(set_iter[args.set])):
             logging.info(f"Inference for file {file['uri']}")
             inference = pipeline(file)
             annotation: Annotation = inference["annotation"]
@@ -281,6 +288,8 @@ class ScoreCommand(BaseCommand):
                             help="Path to report csv")
         parser.add_argument("--data_dir", type=str, required=True,
                             help="Path to the data directory")
+        parser.add_argument("--set", type=str, default="test",
+                            help="Apply the model to this set. Possible values : dev, test, heldout. Default : test")
 
     @classmethod
     def run(cls, args: Namespace):
@@ -310,7 +319,12 @@ class ScoreCommand(BaseCommand):
         c50_df = pd.read_csv(c50_file, sep=" ", header=None)
         c50 = {key: val for key, val in zip(c50_df[0], c50_df   [1])}
 
-        for file in protocol.test():
+        set_iter = {
+            "dev": protocol.development(),
+            "test": protocol.test()
+        }
+
+        for file in set_iter[args.set]:
             if file["uri"] not in annotations.keys():
                 continue
             filenames.append(file["uri"])
