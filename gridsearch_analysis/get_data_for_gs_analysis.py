@@ -214,9 +214,10 @@ def main(argv):
         if (exp_dir / "metrics.yaml").is_file():
             metrics = get_metrics_data(exp_dir / "metrics.yaml")
         else:
+            metrics = dict()
             event_files = [file for file in (exp_dir / "VADTest").glob("events*")]
-            file = event_files[0]
-            metrics = get_data_from_eventfile(str(file))
+            for file in event_files:
+                metrics = {**metrics, **get_data_from_eventfile(str(file))}
             save_data(metrics, exp_dir)
         
         best_metrics = best_epoch_metrics(metrics)
