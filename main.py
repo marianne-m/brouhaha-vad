@@ -147,6 +147,7 @@ class TrainCommand(BaseCommand):
 
     @classmethod
     def run(cls, args: Namespace):
+        print("### Training ###")
 
         model_kwargs, task_kwargs = dict(), dict()
         if args.config:
