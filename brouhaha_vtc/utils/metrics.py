@@ -37,12 +37,14 @@ class CustomMeanAbsoluteError(Metric):
     def __init__(
         self,
         output_transform = None,
+        mask = False
     ) -> None:
         super().__init__()
 
         self.add_state("sum_abs_error", default=torch.tensor(0.0), dist_reduce_fx="sum")
         self.add_state("total", default=torch.tensor(0), dist_reduce_fx="sum")
         self.output_transform = output_transform
+        self.mask = mask
 
     def update(
         self,
@@ -55,6 +57,9 @@ class CustomMeanAbsoluteError(Metric):
             preds: Predictions from model
             target: Ground truth values
         """
+        if self.mask:
+            weights = target[:,:,0].reshape(-1).int()
+
         if self.output_transform:
             preds, target = self.output_transform(preds, target)
         
