@@ -14,7 +14,7 @@ from pyannote.audio.models.segmentation import PyanNet
 from pyannote.audio.models.segmentation.debug import SimpleSegmentationModel
 # from pyannote.audio.pipelines import MultiLabelSegmentation as MultilabelDetectionPipeline
 # from pyannote.audio.tasks.segmentation.multilabel import MultiLabelSegmentation
-from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature
+from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature, Segment
 from pyannote.audio.utils.preprocessors import DeriveMetaLabels
 from pyannote.database import FileFinder, get_protocol, ProtocolFile
 from pyannote.database.protocol.protocol import Preprocessor
@@ -30,6 +30,7 @@ from brouhaha_vtc.models import CustomPyanNetModel, CustomSimpleSegmentationMode
 from brouhaha_vtc.pipeline import RegressiveActivityDetectionPipeline
 
 from brouhaha_vtc.task import RegressiveActivityDetectionTask
+from brouhaha_vtc.utils.metrics import OptimalFScore, OptimalFScoreThreshold
 
 
 class ProcessorChain:
@@ -198,6 +199,78 @@ class TrainCommand(BaseCommand):
 
         trainer = Trainer(**trainer_kwargs)
         trainer.fit(model, ckpt_path=ckpt_path)
+
+
+class TuneCommand(BaseCommand):
+    COMMAND = "tune"
+    DESCRIPTION = "tune the model hyperparameters using optuna"
+
+    @classmethod
+    def init_parser(cls, parser: ArgumentParser):
+        parser.add_argument("-p", "--protocol", type=str,
+                            default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
+                            help="Pyannote database")
+        parser.add_argument("--classes", choices=CLASSES.keys(),
+                            required=True,
+                            type=str, help="Model model checkpoint")
+        parser.add_argument("-m", "--model_path", type=Path, required=True,
+                            help="Model checkpoint to tune pipeline with")
+        parser.add_argument("--params", type=Path,
+                            help="Filename for param yaml file")
+        parser.add_argument("--data_dir", type=str, required=True,
+                            help="Path to the data directory")
+
+    @classmethod
+    def run(cls, args: Namespace):
+        protocol = cls.get_protocol(args)
+        protocol.data_dir = Path(args.data_dir)
+        model = Model.from_pretrained(
+            Path(args.model_path),
+            strict=False,
+        )
+
+        pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
+        
+        fscore = OptimalFScore()
+        opt_threshold = OptimalFScoreThreshold()
+
+        for file in protocol.development():
+            uri = file['uri']
+
+            predicted = pipeline._segmentation(file)
+            pred_vad = predicted[:,0]
+
+            # get target annotation
+            annot = file['annotation'].discretize(
+                support=Segment(
+                    0.0, pipeline._audio.get_duration(file)# + pipeline._segmentation.step
+                ),
+                resolution=pipeline._frames,
+            ).align(to=predicted)
+
+            f = fscore(torch.tensor(pred_vad), torch.tensor(annot.data[:,0]))
+            threshold = opt_threshold(torch.tensor(pred_vad), torch.tensor(annot.data[:,0]))
+
+            print(f'uri\t{uri}\tOptFscore\t{f}\tOptFscore threshold\t{threshold}')
+
+        optimal_threshold = float(opt_threshold.compute())
+
+        print(f'fscore aggregated {fscore.compute()}')
+        print(f'optimal fscore threshold aggregated {optimal_threshold}')
+
+        best_params = {
+            "params": {
+                "min_duration_off": 0,
+                "min_duration_on": 0,
+                "offset": optimal_threshold,
+                "onset": optimal_threshold
+            }
+        }
+
+        if args.params is None:
+            params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
+            with open(params_path, "w") as file:
+                yaml.dump(best_params, file)
 
 
 class ApplyCommand(BaseCommand):
@@ -376,7 +449,7 @@ class ScoreCommand(BaseCommand):
             df_snr_c50.to_csv(args.report_path / "snr_c50_scores.csv")
 
 
-commands = [TrainCommand, ApplyCommand, ScoreCommand]
+commands = [TrainCommand, TuneCommand, ApplyCommand, ScoreCommand]
 
 argparser = argparse.ArgumentParser()
 argparser.add_argument("-v", "--verbose", action="store_true",
