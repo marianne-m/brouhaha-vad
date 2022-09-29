@@ -32,6 +32,7 @@ from pyannote.metrics.detection import (
     DetectionPrecisionRecallFMeasure,
 )
 from pyannote.pipeline.parameter import Categorical, Integer, LogUniform, Uniform
+from brouhaha_vtc.utils.metrics import CustomMeanAbsoluteError, OptimalFScore
 
 
 
@@ -79,6 +80,9 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         #     scores, axis=-1, keepdims=True
         # )
         self._segmentation = Inference(model, **inference_kwargs)
+        self._frames = self._segmentation.model.introspection.frames
+
+        self._audio = model.audio
 
         #  hyper-parameters used for hysteresis thresholding
         self.onset = Uniform(0.0, 1.0)
@@ -88,31 +92,6 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         # or filling short gaps between speech regions
         self.min_duration_on = Uniform(0.0, 1.0)
         self.min_duration_off = Uniform(0.0, 1.0)
-
-        # threshold for regression
-        self.snr_threshold = 0.5
-        self.c50_threshold = 0.5
-
-    def default_parameters(self):
-        return {
-            "onset": 0.800,
-            "offset": 0.800,
-            "min_duration_on": 0.136,
-            "min_duration_off": 0.067,
-        }
-
-    def get_parameters(self, threshold_file, epoch):
-        file = self.model.logger.log_dir + "/vad_fscore_threshold.yaml"
-        with open(threshold_file, "r") as file:
-            opt_threshold = yaml.load(file, Loader=yaml.loader.SafeLoader)
-        threshold = opt_threshold[f"epoch_{epoch}"]["optimal_th"]
-        params = {
-            "onset": threshold,
-            "offset": threshold,
-            "min_duration_on": 0.136,
-            "min_duration_off": 0.067,
-        }
-        return params
 
     def classes(self):
         return ["SPEECH"]
@@ -182,6 +161,7 @@ class RegressiveActivityDetectionPipeline(Pipeline):
 
         return {
             "vadTestMetric": DetectionPrecisionRecallFMeasure(collar=0.0, skip_overlap=False),
-            "snrTestMetric": mse_loss,
-            "c50TestMetric": mse_loss
+            "snrTestMetric": CustomMeanAbsoluteError(),
+            "c50TestMetric": CustomMeanAbsoluteError(),
+            "vadTestMetric2": OptimalFScore()
         }
