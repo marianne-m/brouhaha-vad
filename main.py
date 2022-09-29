@@ -395,7 +395,8 @@ class ScoreCommand(BaseCommand):
         snr_test_metric = []
         c50_test_metric = []
         c50_df = pd.read_csv(c50_file, sep=" ", header=None)
-        c50 = {key: val for key, val in zip(c50_df[0], c50_df   [1])}
+        c50 = {key: val for key, val in zip(c50_df[0], c50_df[1])}
+        nb_of_frames = []
 
         set_iter = {
             "dev": protocol.development(),
@@ -431,7 +432,7 @@ class ScoreCommand(BaseCommand):
                 support=file['annotated'][0], resolution=resolution, duration=file['annotated'][0].duration
             )
 
-            mse_snr = metric["snrTestMetric"](torch.tensor(preds.data), torch.tensor(target.data), weight=torch.tensor(annot.data))
+            mse_snr = metric["snrTestMetric"](torch.tensor(preds.data), torch.tensor(target.data), weights=torch.Tensor(annot.data))
             snr_test_metric.append(float(mse_snr))
 
             # score c50
@@ -443,8 +444,8 @@ class ScoreCommand(BaseCommand):
 
         # totals for snr and c50
         filenames.append("TOTAL")
-        snr_test_metric.append(np.mean(snr_test_metric))
-        c50_test_metric.append(np.mean(c50_test_metric))
+        snr_test_metric.append(metric["snrTestMetric"].compute())
+        c50_test_metric.append(metric["c50TestMetric"].compute())
 
         df_fscore: pd.DataFrame = metric["vadTestMetric"].report(display=True)
         df_snr_c50 = pd.DataFrame({"uri": filenames, "MSE(snr)": snr_test_metric, "MSE(c50)": c50_test_metric})
