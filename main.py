@@ -305,8 +305,13 @@ class ApplyCommand(BaseCommand):
             strict=False,
         )
         pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
-        epoch = 3 #TODO get epoch from model name
-        # pipeline.get_parameters(file, epoch)
+
+        if args.params is None:
+            params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
+        else:
+            params_path = Path(args.params)
+        pipeline.load_params(params_path)
+
         apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
         apply_folder.mkdir(parents=True, exist_ok=True)
 
