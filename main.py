@@ -280,7 +280,7 @@ class ApplyCommand(BaseCommand):
     @classmethod
     def init_parser(cls, parser: ArgumentParser):
         parser.add_argument("-p", "--protocol", type=str,
-                            default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
+                            # default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
                             help="Pyannote database")
         parser.add_argument("--classes", choices=CLASSES.keys(),
                             required=True,
@@ -298,8 +298,24 @@ class ApplyCommand(BaseCommand):
 
     @classmethod
     def run(cls, args: Namespace):
-        protocol = cls.get_protocol(args)
-        protocol.data_dir = Path(args.data_dir)
+
+        if args.protocol:
+            protocol = cls.get_protocol(args)
+            protocol.data_dir = Path(args.data_dir)
+            set_iter = {
+                "dev": protocol.development(),
+                "test": protocol.test()
+            }
+            data_iterator = set_iter[args.set]
+        else:
+            def iter():
+                for file in Path(args.data_dir).glob("*.wav"):
+                    yield {
+                        "uri": file.stem,
+                        "audio": file
+                    }
+            data_iterator = iter()
+
         model = Model.from_pretrained(
             Path(args.model_path),
             strict=False,
@@ -323,12 +339,7 @@ class ApplyCommand(BaseCommand):
         snr_folder.mkdir(parents=True, exist_ok=True)
         c50_folder.mkdir(parents=True, exist_ok=True)
 
-        set_iter = {
-            "dev": protocol.development(),
-            "test": protocol.test()
-        }
-
-        for file in tqdm(list(set_iter[args.set])):
+        for file in tqdm(list(data_iterator)):
             logging.info(f"Inference for file {file['uri']}")
             inference = pipeline(file)
             annotation: Annotation = inference["annotation"]
@@ -342,7 +353,8 @@ class ApplyCommand(BaseCommand):
                 np.save(c50_file, c50)
             with open(apply_folder / "reverb_labels.txt", "a") as label_file:
                 label_file.write(f"{file['uri']} {np.mean(c50)}\n")
-
+            with open(apply_folder / "mean_snr_labels.txt", "a") as snr_file:
+                snr_file.write(f"{file['uri']} {np.mean(snr)}\n")
 
 class ScoreCommand(BaseCommand):
     COMMAND = "score"
@@ -396,7 +408,6 @@ class ScoreCommand(BaseCommand):
         c50_test_metric = []
         c50_df = pd.read_csv(c50_file, sep=" ", header=None)
         c50 = {key: val for key, val in zip(c50_df[0], c50_df[1])}
-        nb_of_frames = []
 
         set_iter = {
             "dev": protocol.development(),
