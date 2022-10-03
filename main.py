@@ -280,7 +280,6 @@ class ApplyCommand(BaseCommand):
     @classmethod
     def init_parser(cls, parser: ArgumentParser):
         parser.add_argument("-p", "--protocol", type=str,
-                            # default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
                             help="Pyannote database")
         parser.add_argument("--classes", choices=CLASSES.keys(),
                             required=True,
@@ -355,6 +354,7 @@ class ApplyCommand(BaseCommand):
                 label_file.write(f"{file['uri']} {np.mean(c50)}\n")
             with open(apply_folder / "mean_snr_labels.txt", "a") as snr_file:
                 snr_file.write(f"{file['uri']} {np.mean(snr)}\n")
+
 
 class ScoreCommand(BaseCommand):
     COMMAND = "score"
