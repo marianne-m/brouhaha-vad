@@ -455,8 +455,8 @@ class ScoreCommand(BaseCommand):
 
         # totals for snr and c50
         filenames.append("TOTAL")
-        snr_test_metric.append(metric["snrTestMetric"].compute())
-        c50_test_metric.append(metric["c50TestMetric"].compute())
+        snr_test_metric.append(float(metric["snrTestMetric"].compute()))
+        c50_test_metric.append(float(metric["c50TestMetric"].compute()))
 
         df_fscore: pd.DataFrame = metric["vadTestMetric"].report(display=True)
         df_snr_c50 = pd.DataFrame({"uri": filenames, "MSE(snr)": snr_test_metric, "MSE(c50)": c50_test_metric})
