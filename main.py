@@ -308,7 +308,10 @@ class ApplyCommand(BaseCommand):
             data_iterator = set_iter[args.set]
         else:
             def iter():
-                for file in Path(args.data_dir).glob("*.wav"):
+                files = []
+                files.extend(Path(args.data_dir).glob("*.wav"))
+                files.extend(Path(args.data_dir).glob("**/*.wav"))
+                for file in files:
                     yield {
                         "uri": file.stem,
                         "audio": file
