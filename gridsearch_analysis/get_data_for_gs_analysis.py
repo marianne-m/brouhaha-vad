@@ -207,31 +207,40 @@ def main(argv):
     args = parse_args(argv)
 
     all_models_data = None
+    no_checkpoints = []
 
     experimental_dirs = Path(args.gridsearch_path).glob('*')
     for exp_dir in experimental_dirs:
         # get metrics
-        if (exp_dir / "metrics.yaml").is_file():
-            metrics = get_metrics_data(exp_dir / "metrics.yaml")
-        else:
-            metrics = dict()
-            event_files = [file for file in (exp_dir / "VADTest").glob("events*")]
-            for file in event_files:
-                metrics = {**metrics, **get_data_from_eventfile(str(file))}
-            save_data(metrics, exp_dir)
-        
-        best_metrics = best_epoch_metrics(metrics)
-        
-        # get config params
-        config = get_config_params(exp_dir)
-        config = gridsearch_params(config)
+        try:
+            if (exp_dir / "metrics.yaml").is_file():
+                metrics = get_metrics_data(exp_dir / "metrics.yaml")
+            else:
+                metrics = dict()
+                event_files = [file for file in (exp_dir / "VADTest").glob("events*")]
+                for file in event_files:
+                    metrics = {**metrics, **get_data_from_eventfile(str(file))}
+                save_data(metrics, exp_dir)
 
-        data = {**config, **best_metrics}
-        data['name'] = exp_dir.name
-        all_models_data = append_data_dict(data, all_models_data)
+            best_metrics = best_epoch_metrics(metrics)
+            
+            # get config params
+            config = get_config_params(exp_dir)
+            config = gridsearch_params(config)
+
+            data = {**config, **best_metrics}
+            data['name'] = exp_dir.name
+            data['only_vad'] = 'only_vad' in data['name']
+            all_models_data = append_data_dict(data, all_models_data)
+        except ValueError:
+            print(f'No checkpoint nor logs for {exp_dir.name}')
+            no_checkpoints.append(exp_dir.name)
     
     models_data_df = create_dataframe(all_models_data)
     models_data_df.to_csv(args.output)
+
+    print("A problem occured for the following experiments : ")
+    print(no_checkpoints)
 
 
 if __name__ == "__main__":
