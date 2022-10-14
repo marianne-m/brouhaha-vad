@@ -66,6 +66,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
         max_error_snr: int = MAX_ERROR_SNR,
         max_error_c50: int = MAX_ERROR_C50,
+        lambda_vad: float=1,
         lambda_c50: float=1,
         lambda_snr: float=1
     ):
@@ -89,6 +90,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_losses_snr = []
         self.max_error_snr = max_error_snr
         self.max_error_c50 = max_error_c50
+        self.lambda_vad = lambda_vad
         self.lambda_snr = lambda_snr
         self.lambda_c50 = lambda_c50
 
@@ -286,10 +288,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         loss_snr = loss_snr / self.first_loss_snr
         loss_c50 = loss_c50 / self.first_loss_c50
 
-        loss = loss_vad + \
+        loss = self.lambda_vad * loss_vad + \
                + self.lambda_snr * loss_snr \
                + self.lambda_c50 * loss_c50
-
+        
         return loss, loss_vad, loss_snr, loss_c50
 
     def default_metric(
@@ -347,10 +349,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         )
 
         validation = (
-            (1 - output[f"{self.logging_prefix}vadValMetric"]) \
+            self.lambda_vad * (1 - output[f"{self.logging_prefix}vadValMetric"]) \
             + self.lambda_snr * output[f"{self.logging_prefix}snrValMetric"] / self.max_error_snr \
             + self.lambda_c50 * output[f"{self.logging_prefix}c50ValMetric"] / self.max_error_c50 \
-        ) / (1 + self.lambda_snr + self.lambda_c50)
+        ) / (self.lambda_vad + self.lambda_snr + self.lambda_c50)
 
         self.model.log(
             f"{self.logging_prefix}ValidationMetric",
