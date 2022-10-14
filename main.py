@@ -8,12 +8,13 @@ import torch
 import yaml
 from yaml.loader import SafeLoader
 import pandas as pd
+import numpy as np
 from pyannote.audio import Model
 from pyannote.audio.models.segmentation import PyanNet
 from pyannote.audio.models.segmentation.debug import SimpleSegmentationModel
 # from pyannote.audio.pipelines import MultiLabelSegmentation as MultilabelDetectionPipeline
 # from pyannote.audio.tasks.segmentation.multilabel import MultiLabelSegmentation
-from pyannote.core import Annotation
+from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature, Segment
 from pyannote.audio.utils.preprocessors import DeriveMetaLabels
 from pyannote.database import FileFinder, get_protocol, ProtocolFile
 from pyannote.database.protocol.protocol import Preprocessor
@@ -26,8 +27,10 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
 from brouhaha_vtc.models import CustomPyanNetModel, CustomSimpleSegmentationModel
+from brouhaha_vtc.pipeline import RegressiveActivityDetectionPipeline
 
 from brouhaha_vtc.task import RegressiveActivityDetectionTask
+from brouhaha_vtc.utils.metrics import OptimalFScore, OptimalFScoreThreshold
 
 
 class ProcessorChain:
@@ -215,35 +218,62 @@ class TuneCommand(BaseCommand):
                             type=str, help="Model model checkpoint")
         parser.add_argument("-m", "--model_path", type=Path, required=True,
                             help="Model checkpoint to tune pipeline with")
-        parser.add_argument("-nit", "--n_iterations", type=int, default=50,
-                            help="Number of tuning iterations")
-        parser.add_argument("--metric", choices=["fscore", "ier"],
-                            default="fscore")
-        parser.add_argument("--params", type=Path, default=Path("best_params.yml"),
+        parser.add_argument("--params", type=Path,
                             help="Filename for param yaml file")
+        parser.add_argument("--data_dir", type=str, required=True,
+                            help="Path to the data directory")
 
     @classmethod
     def run(cls, args: Namespace):
         protocol = cls.get_protocol(args)
+        protocol.data_dir = Path(args.data_dir)
         model = Model.from_pretrained(
             Path(args.model_path),
             strict=False,
         )
-        # Dirty fix for the non-serialization of the task params
-        pipeline = MultilabelDetectionPipeline(segmentation=model,
-                                               fscore=args.metric == "fscore")
-        # pipeline.instantiate(pipeline.default_parameters())
-        validation_files = list(protocol.development())
-        optimizer = Optimizer(pipeline)
-        optimizer.tune(validation_files,
-                       n_iterations=args.n_iterations,
-                       show_progress=True)
-        best_params = optimizer.best_params
-        logging.info(f"Best params: \n{best_params}")
-        params_filepath: Path = args.exp_dir / args.params
-        logging.info(f"Saving params to {params_filepath}")
-        pipeline.instantiate(best_params)
-        pipeline.dump_params(params_filepath)
+
+        pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
+        
+        fscore = OptimalFScore()
+        opt_threshold = OptimalFScoreThreshold()
+
+        for file in protocol.development():
+            uri = file['uri']
+
+            predicted = pipeline._segmentation(file)
+            pred_vad = predicted[:,0]
+
+            # get target annotation
+            annot = file['annotation'].discretize(
+                support=Segment(
+                    0.0, pipeline._audio.get_duration(file)# + pipeline._segmentation.step
+                ),
+                resolution=pipeline._frames,
+            ).align(to=predicted)
+
+            f = fscore(torch.tensor(pred_vad), torch.tensor(annot.data[:,0]))
+            threshold = opt_threshold(torch.tensor(pred_vad), torch.tensor(annot.data[:,0]))
+
+            print(f'uri\t{uri}\tOptFscore\t{f}\tOptFscore threshold\t{threshold}')
+
+        optimal_threshold = float(opt_threshold.compute())
+
+        print(f'fscore aggregated {fscore.compute()}')
+        print(f'optimal fscore threshold aggregated {optimal_threshold}')
+
+        best_params = {
+            "params": {
+                "min_duration_off": 0,
+                "min_duration_on": 0,
+                "offset": optimal_threshold,
+                "onset": optimal_threshold
+            }
+        }
+
+        if args.params is None:
+            params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
+            with open(params_path, "w") as file:
+                yaml.dump(best_params, file)
 
 
 class ApplyCommand(BaseCommand):
@@ -253,7 +283,6 @@ class ApplyCommand(BaseCommand):
     @classmethod
     def init_parser(cls, parser: ArgumentParser):
         parser.add_argument("-p", "--protocol", type=str,
-                            default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
                             help="Pyannote database")
         parser.add_argument("--classes", choices=CLASSES.keys(),
                             required=True,
@@ -264,25 +293,73 @@ class ApplyCommand(BaseCommand):
                             help="Path to best params. Default to EXP_DIR/best_params.yml")
         parser.add_argument("--apply_folder", type=Path,
                             help="Path to apply folder")
+        parser.add_argument("--data_dir", type=str, required=True,
+                            help="Path to the data directory")
+        parser.add_argument("--set", type=str, default="test",
+                            help="Apply the model to this set. Possible values : dev, test, heldout. Default : test")
 
     @classmethod
     def run(cls, args: Namespace):
-        protocol = cls.get_protocol(args)
+
+        if args.protocol:
+            protocol = cls.get_protocol(args)
+            protocol.data_dir = Path(args.data_dir)
+            set_iter = {
+                "dev": protocol.development(),
+                "test": protocol.test()
+            }
+            data_iterator = set_iter[args.set]
+        else:
+            def iter():
+                files = []
+                files.extend(Path(args.data_dir).glob("*.wav"))
+                files.extend(Path(args.data_dir).glob("**/*.wav"))
+                for file in files:
+                    yield {
+                        "uri": file.stem,
+                        "audio": file
+                    }
+            data_iterator = iter()
+
         model = Model.from_pretrained(
             Path(args.model_path),
             strict=False,
         )
-        pipeline = MultilabelDetectionPipeline(segmentation=model)
-        params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
+        pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
+
+        if args.params is None:
+            params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
+        else:
+            params_path = Path(args.params)
         pipeline.load_params(params_path)
+
         apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
         apply_folder.mkdir(parents=True, exist_ok=True)
 
-        for file in tqdm(list(protocol.test())):
+        rttm_folder = apply_folder / "rttm_files"
+        snr_folder = apply_folder / "detailed_snr_labels"
+        c50_folder = apply_folder / "c50"
+
+        rttm_folder.mkdir(parents=True, exist_ok=True)
+        snr_folder.mkdir(parents=True, exist_ok=True)
+        c50_folder.mkdir(parents=True, exist_ok=True)
+
+        for file in tqdm(list(data_iterator)):
             logging.info(f"Inference for file {file['uri']}")
-            annotation: Annotation = pipeline(file)
-            with open(apply_folder / (file["uri"].replace("/", "_") + ".rttm"), "w") as rttm_file:
+            inference = pipeline(file)
+            annotation: Annotation = inference["annotation"]
+            snr = inference["snr"]
+            c50 = inference["c50"]
+            with open(rttm_folder / (file["uri"].replace("/", "_") + ".rttm"), "w") as rttm_file:
                 annotation.write_rttm(rttm_file)
+            with open(snr_folder / (file["uri"].replace("/", "_") + ".npy"), "wb") as snr_file:
+                np.save(snr_file, snr)
+            with open(c50_folder / (file["uri"].replace("/", "_") + ".npy"), "wb") as c50_file:
+                np.save(c50_file, c50)
+            with open(apply_folder / "reverb_labels.txt", "a") as label_file:
+                label_file.write(f"{file['uri']} {np.mean(c50)}\n")
+            with open(apply_folder / "mean_snr_labels.txt", "a") as snr_file:
+                snr_file.write(f"{file['uri']} {np.mean(snr)}\n")
 
 
 class ScoreCommand(BaseCommand):
@@ -305,33 +382,94 @@ class ScoreCommand(BaseCommand):
                             help="Model model checkpoint")
         parser.add_argument("--report_path", type=Path, required=True,
                             help="Path to report csv")
+        parser.add_argument("--data_dir", type=str, required=True,
+                            help="Path to the data directory")
+        parser.add_argument("--set", type=str, default="test",
+                            help="Apply the model to this set. Possible values : dev, test, heldout. Default : test")
 
     @classmethod
     def run(cls, args: Namespace):
         protocol = cls.get_protocol(args)
+        protocol.data_dir = Path(args.data_dir)
+
         apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
+
+        rttm_folder = apply_folder / "rttm_files"
+        snr_folder = apply_folder / "detailed_snr_labels"
+        c50_file = apply_folder / "reverb_labels.txt"
+
         annotations: Dict[str, Annotation] = {}
-        for filepath in apply_folder.glob("*.rttm"):
+        for filepath in rttm_folder.glob("*.rttm"):
             rttm_annots = load_rttm(filepath)
             annotations.update(rttm_annots)
         model = Model.from_pretrained(
             Path(args.model_path),
             strict=False,
         )
-        pipeline = MultilabelDetectionPipeline(segmentation=model,
-                                               fscore=args.metric == "fscore")
+        pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
         metric: BaseMetric = pipeline.get_metric()
 
-        for file in protocol.test():
-            if file["uri"] not in annotations:
-                continue
-            inference = annotations[file["uri"]]
-            metric(file["annotation"], inference, file["annotated"])
+        filenames = []
+        snr_test_metric = []
+        c50_test_metric = []
+        c50_df = pd.read_csv(c50_file, sep=" ", header=None)
+        c50 = {key: val for key, val in zip(c50_df[0], c50_df[1])}
 
-        df: pd.DataFrame = metric.report(display=True)
+        set_iter = {
+            "dev": protocol.development(),
+            "test": protocol.test()
+        }
+
+        for file in set_iter[args.set]:
+            if file["uri"] not in annotations.keys():
+                continue
+            filenames.append(file["uri"])
+            # score vad
+            inference = annotations[file["uri"]]
+            metric["vadTestMetric"](file["annotation"], inference, file["annotated"])
+
+            # score snr
+            # get predicted snr
+            snr_preds_file = str(snr_folder / file['uri']) + ".npy"
+            preds_array = np.load(snr_preds_file)
+            preds_array = np.expand_dims(preds_array, axis=1)
+
+            resolution = file['annotated'][0].duration / preds_array.shape[0]
+            sliding_window = SlidingWindow(
+                start=0, step=resolution, duration=resolution
+            )
+            preds = SlidingWindowFeature(preds_array, sliding_window)
+
+            # get target snr
+            target = file['target_features']['snr']
+            target = target.align(to=preds)
+
+            # get target annotation to mask snr
+            annot = file["annotation"].discretize(
+                support=file['annotated'][0], resolution=resolution, duration=file['annotated'][0].duration
+            )
+
+            mse_snr = metric["snrTestMetric"](torch.tensor(preds.data), torch.tensor(target.data), weights=torch.Tensor(annot.data))
+            snr_test_metric.append(float(mse_snr))
+
+            # score c50
+            c50_pred = c50[file["uri"]]
+            c50_target = file["target_features"]["c50"]
+
+            mse_c50 = metric["c50TestMetric"](torch.tensor(c50_pred), torch.tensor(c50_target))
+            c50_test_metric.append(float(mse_c50))
+
+        # totals for snr and c50
+        filenames.append("TOTAL")
+        snr_test_metric.append(float(metric["snrTestMetric"].compute()))
+        c50_test_metric.append(float(metric["c50TestMetric"].compute()))
+
+        df_fscore: pd.DataFrame = metric["vadTestMetric"].report(display=True)
+        df_snr_c50 = pd.DataFrame({"uri": filenames, "MSE(snr)": snr_test_metric, "MSE(c50)": c50_test_metric})
         if args.report_path is not None:
-            args.report_path.parent.mkdir(parents=True, exist_ok=True)
-            df.to_csv(args.report_path)
+            args.report_path.mkdir(parents=True, exist_ok=True)
+            df_fscore.to_csv(args.report_path / "fscore.csv")
+            df_snr_c50.to_csv(args.report_path / "snr_c50_scores.csv")
 
 
 commands = [TrainCommand, TuneCommand, ApplyCommand, ScoreCommand]
