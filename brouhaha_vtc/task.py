@@ -66,7 +66,6 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
         max_error_snr: int = MAX_ERROR_SNR,
         max_error_c50: int = MAX_ERROR_C50,
-        lambda_vad: float=1,
         lambda_c50: float=1,
         lambda_snr: float=1
     ):
@@ -90,7 +89,6 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_losses_snr = []
         self.max_error_snr = max_error_snr
         self.max_error_c50 = max_error_c50
-        self.lambda_vad = lambda_vad
         self.lambda_snr = lambda_snr
         self.lambda_c50 = lambda_c50
 
