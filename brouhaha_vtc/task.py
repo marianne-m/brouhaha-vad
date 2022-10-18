@@ -64,13 +64,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         pin_memory: bool = False,
         augmentation: BaseWaveformTransform = None,
         metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
-<<<<<<< Updated upstream
         max_error_snr: int = MAX_ERROR_SNR,
         max_error_c50: int = MAX_ERROR_C50,
-=======
         lambda_c50: float=1,
         lambda_snr: float=1
->>>>>>> Stashed changes
     ):
 
         super().__init__(
@@ -90,13 +87,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_loss_c50 = None
         self.first_losses_c50 = []
         self.first_losses_snr = []
-<<<<<<< Updated upstream
         self.max_error_snr = max_error_snr
         self.max_error_c50 = max_error_c50
-=======
         self.lambda_snr = lambda_snr
         self.lambda_c50 = lambda_c50
->>>>>>> Stashed changes
 
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
@@ -285,17 +279,9 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             Mean Square Error normalized by the first value
 
         """
-<<<<<<< Updated upstream
-        lambda_1 = 1
-        lambda_2 = 1
-        loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0])
-        loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=target[:,:,0].unsqueeze(dim=2))
-        loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2])
-=======
         loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0], weight=weight)
         loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight)
         loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight)
->>>>>>> Stashed changes
 
         loss_snr = loss_snr / self.first_loss_snr
         loss_c50 = loss_c50 / self.first_loss_c50
