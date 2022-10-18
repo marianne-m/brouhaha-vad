@@ -1,0 +1,17 @@
+task:
+  duration: 6
+  batch_size: 64
+architecture:
+  sincnet:
+    stride: 10
+    sample_rate: 16000
+  lstm:
+    hidden_size: 256
+    num_layers: 3
+    bidirectional: true
+    monolithic: true
+    dropout: 0.5
+    batch_first: true
+  linear:
+    hidden_size: 128
+    num_layers: 2
