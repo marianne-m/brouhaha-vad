@@ -61,7 +61,10 @@ CLASSES = {"vtcdebug": {'classes': ["READER", "AGREER", "DISAGREER"],
                          'intersections': {}},
            "brouhaha": {'classes': ["A"],
                         'unions': {},
-                        'intersections': {}}
+                        'intersections': {}},
+           "dihard": {'classes': [f"speaker{n}" for n in range(2000)],
+                        'unions': {"A": [f"speaker{n}" for n in range(2000)]},
+                        'intersections': {}},
            }
 
 
@@ -241,12 +244,16 @@ class TuneCommand(BaseCommand):
             pred_vad = predicted[:,0]
 
             # get target annotation
-            annot = file['annotation'].discretize(
-                support=Segment(
-                    0.0, pipeline._audio.get_duration(file)# + pipeline._segmentation.step
-                ),
-                resolution=pipeline._frames,
-            ).align(to=predicted)
+            if not bool(file['annotation']):
+                data = np.zeros(predicted.data.shape)
+                annot = SlidingWindowFeature(data, predicted.sliding_window)
+            else:
+                annot = file['annotation'].discretize(
+                    support=Segment(
+                        0.0, pipeline._audio.get_duration(file)# + pipeline._segmentation.step
+                    ),
+                    resolution=pipeline._frames,
+                ).align(to=predicted)
 
             f = fscore(torch.tensor(pred_vad), torch.tensor(annot.data[:,0]))
             threshold = opt_threshold(torch.tensor(pred_vad), torch.tensor(annot.data[:,0]))
