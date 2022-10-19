@@ -1,15 +1,29 @@
-# brouhaha-vtc
+# brouhaha-vad
 
-A modified pyannote VTC task and model for predicting SNR and reverberation (C50)
+`brouhaha` is a model for voiceactivity detection, signal-to-noise ratio estimation,
+and C50 room acoustics prediction.
 
 
-## Installation
+
+## Installation & extracting predictions
+
+#### Installation
 
 ```
 git clone ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/brouhaha-vtc.git
 conda env create -f environment.yml
 conda activate brouhaha-vad
 pip install git+ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/pyannote-brouhaha-db.git
+```
+
+#### Extracting predictions
+
+```
+python main.py path/to/predictions apply \
+          --model_path models/dur_6_bs_64_lstm_hs_256_lstm_nl_3_dropout_0.5/checkpoints/
+          --classes brouhaha \
+          --apply_folder path/to/predictions \
+          --data_dir path/to/data
 ```
 
 ## Specifying your database
