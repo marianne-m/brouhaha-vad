@@ -302,6 +302,8 @@ class ApplyCommand(BaseCommand):
                             help="Path to apply folder")
         parser.add_argument("--data_dir", type=str, required=True,
                             help="Path to the data directory")
+        parser.add_argument("--recursive", action="store_true",
+                            help="If --recursive option is used, apply recursively to the data_dir")
         parser.add_argument("--set", type=str, default="test",
                             help="Apply the model to this set. Possible values : dev, test, heldout. Default : test")
 
@@ -319,8 +321,10 @@ class ApplyCommand(BaseCommand):
         else:
             def iter():
                 files = []
-                files.extend(Path(args.data_dir).glob("*.wav"))
-                files.extend(Path(args.data_dir).glob("**/*.wav"))
+                if args.recursive:
+                    files.extend(Path(args.data_dir).glob("**/*.wav"))
+                else:
+                    files.extend(Path(args.data_dir).glob("*.wav"))
                 for file in files:
                     yield {
                         "uri": file.stem,
