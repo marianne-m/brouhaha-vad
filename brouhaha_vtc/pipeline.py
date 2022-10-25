@@ -93,6 +93,16 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         self.min_duration_on = Uniform(0.0, 1.0)
         self.min_duration_off = Uniform(0.0, 1.0)
 
+    def default_parameters(self):
+        # parameters optimized on Brouhaha development set
+        print("Using default parameters optimized on Brouhaha")
+        return {
+            "onset": 0.780,
+            "offset": 0.780,
+            "min_duration_on": 0,
+            "min_duration_off": 0,
+        }
+
     def classes(self):
         return ["SPEECH"]
 
