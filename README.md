@@ -10,7 +10,8 @@ and C50 room acoustics prediction.
 #### Installation
 
 ```
-git clone ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/brouhaha-vtc.git
+git clone git@github.com:marianne-m/brouhaha-vad.git
+cd brouhaha-vad
 conda env create -f environment.yml
 conda activate brouhaha-vad
 pip install git+ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/pyannote-brouhaha-db.git
