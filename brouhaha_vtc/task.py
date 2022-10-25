@@ -1,24 +1,34 @@
 import itertools
 from re import T
 
-from typing import Dict, Sequence, Text, Tuple, Union
+from typing import Dict, Optional, Sequence, Text, Tuple, Union
 
 import torch
+import yaml
 from pyannote.database import Protocol
 from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
-from torchmetrics import Metric, MeanSquaredError
+from torchmetrics import Metric
+import torchmetrics.functional as F
 
 from pyannote.audio.core.task import Problem, Resolution, Specifications, Task
 from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
 from pyannote.audio.core.io import AudioFile
 from pyannote.core import Segment, SlidingWindowFeature
 
+from brouhaha_vtc.models import C50_MAX, C50_MIN, SNR_MAX, SNR_MIN
+
+from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError, OptimalFScore, OptimalFScoreThreshold
+
 
 
 from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
 
 import numpy as np
+import yaml
 
+
+MAX_ERROR_SNR = SNR_MAX - SNR_MIN
+MAX_ERROR_C50 = C50_MAX - C50_MIN
 
 
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
@@ -54,6 +64,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         pin_memory: bool = False,
         augmentation: BaseWaveformTransform = None,
         metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
+        max_error_snr: int = MAX_ERROR_SNR,
+        max_error_c50: int = MAX_ERROR_C50,
+        lambda_c50: float=1,
+        lambda_snr: float=1
     ):
 
         super().__init__(
@@ -69,10 +83,14 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
         self.balance = balance
         self.weight = weight
-        self.first_loss_snr = 1
-        self.first_loss_c50 = 1
+        self.first_loss_snr = None
+        self.first_loss_c50 = None
         self.first_losses_c50 = []
         self.first_losses_snr = []
+        self.max_error_snr = max_error_snr
+        self.max_error_c50 = max_error_c50
+        self.lambda_snr = lambda_snr
+        self.lambda_c50 = lambda_c50
 
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
@@ -215,6 +233,12 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.first_loss_snr = max(self.first_losses_snr)
         self.first_loss_c50 = max(self.first_losses_c50)
 
+        first_losses = {"snr": self.first_loss_snr,
+                        "c50": self.first_loss_c50}
+
+        with open(self.model.logger.log_dir + "/first_losses.yaml", "w") as file:
+            yaml.dump(first_losses, file)
+
 
     def default_loss(
         self, specifications: Specifications, target, prediction, weight=None
@@ -255,19 +279,34 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             Mean Square Error normalized by the first value
 
         """
-        lambda_1 = 1
-        lambda_2 = 1
-        loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0], weight=weight)
-        loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight)
-        loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight)
+        loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0])
+        loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=target[:,:,0].unsqueeze(dim=2))
+        loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2])
 
         loss_snr = loss_snr / self.first_loss_snr
         loss_c50 = loss_c50 / self.first_loss_c50
 
-        loss = loss_vad + lambda_1 * loss_snr + lambda_2 * loss_c50
-
+        loss = self.lambda_vad * loss_vad + \
+               + self.lambda_snr * loss_snr \
+               + self.lambda_c50 * loss_c50
+        
         return loss, loss_vad, loss_snr, loss_c50
-    
+
+    def default_metric(
+        self,
+    ) -> Union[Metric, Sequence[Metric], Dict[str, Metric]]:
+        """Returns the three validation metric"""
+
+        def transform(index):
+            return lambda preds, target: (preds[:,:,index].reshape(-1), target[:,:,index].reshape(-1))
+
+        return {
+            "snrValMetric": CustomMeanAbsoluteError(output_transform=transform(1), mask=True),
+            "c50ValMetric": CustomMeanAbsoluteError(output_transform=transform(2)),
+            "vadValMetric": OptimalFScore(output_transform=transform(0)),
+            "vadOptiTh": OptimalFScoreThreshold(output_transform=transform(0))
+        }
+
     def validation_step(self, batch, batch_idx: int):
         """Compute validation area under the ROC curve
 
@@ -294,10 +333,9 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         preds = y_pred[:, warm_up_left : num_frames - warm_up_right : 10]
         target = y[:, warm_up_left : num_frames - warm_up_right : 10]
 
-        # for now we keep AUROC on VAD as validation metric
-        self.model.validation_metric(
-            preds[:,:,0].reshape(-1),
-            target[:,:,0].reshape(-1).int(),
+        output = self.model.validation_metric(
+            preds,
+            target,
         )
 
         self.model.log_dict(
@@ -307,6 +345,31 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             prog_bar=True,
             logger=True,
         )
+
+        validation = (
+            self.lambda_vad * (1 - output[f"{self.logging_prefix}vadValMetric"]) \
+            + self.lambda_snr * output[f"{self.logging_prefix}snrValMetric"] / self.max_error_snr \
+            + self.lambda_c50 * output[f"{self.logging_prefix}c50ValMetric"] / self.max_error_c50 \
+        ) / (self.lambda_vad + self.lambda_snr + self.lambda_c50)
+
+        self.model.log(
+            f"{self.logging_prefix}ValidationMetric",
+            validation,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+
+        with open(self.model.logger.log_dir + "/vad_fscore_threshold.yaml", "a") as file:
+            optimal_th = {
+                f"epoch_{self.model.current_epoch}": {
+                    "fscore": float(output[f"{self.logging_prefix}vadValMetric"]),
+                    "optimal_th": float(output[f"{self.logging_prefix}vadOptiTh"])
+                }
+            }
+            yaml.dump(optimal_th, file)
+
 
     def training_step(self, batch, batch_idx: int):
         """Training step according specific to RegressiveActivityDetectionTask
@@ -358,6 +421,13 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         if self.model.current_epoch == 0 and batch_idx < 10:
             self.set_first_losses(self.specifications, y, y_pred, weight=weight)
 
+        # retrieve first losses if resuming training
+        if not self.first_loss_snr:
+            with open(self.model.logger.log_dir + "/first_losses.yaml", "r") as file:
+                first_losses = yaml.load(file, Loader=yaml.loader.SafeLoader)
+            self.first_loss_snr = first_losses['snr']
+            self.first_loss_c50 = first_losses['c50']
+
         # compute loss
         losses = self.default_loss(self.specifications, y, y_pred, weight=weight)
 
@@ -371,3 +441,24 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
                 logger=True,
             )
         return {"loss": losses[0]}
+
+    @property
+    def val_monitor(self):
+        """Quantity (and direction) to monitor
+
+        Useful for model checkpointing or early stopping.
+
+        Returns
+        -------
+        monitor : str
+            Name of quantity to monitor.
+        mode : {'min', 'max}
+            Minimize
+
+        See also
+        --------
+        pytorch_lightning.callbacks.ModelCheckpoint
+        pytorch_lightning.callbacks.EarlyStopping
+        """
+
+        return f"{self.logging_prefix}ValidationMetric", "min"
