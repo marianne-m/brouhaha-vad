@@ -15,6 +15,7 @@ cd brouhaha-vad
 conda env create -f environment.yml
 conda activate brouhaha-vad
 pip install git+ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/pyannote-brouhaha-db.git
+conda install -c conda-forge libsndfile
 ```
 
 #### Extracting predictions
