@@ -1,13 +1,17 @@
-# brouhaha-vad
+# Brouhaha: multi-task training for voice activity detection, speech-to-noise ratio, and C50 room acoustics estimation (2023)
 
-`brouhaha` is a model for voiceactivity detection, signal-to-noise ratio estimation,
-and C50 room acoustics prediction.
+![](doc/brouhaha.png)
 
+Here's the companion repository of *Brouhaha*. 
+You'll find the instructions to install and run our pretrained model. Given an audio segment, Brouhaha extracts:
+- speech/non-speech segments.
+- Speech-to-Noise Ratio (SNR) , that measures the speech level compared to the noise level.. 
+- C50, that measures to which extent the environment is reverberant
 
+You can listen to some audio samples we generated to train the model [here](https://marvinlvn.github.io/brouhaha/) 
+If you want to dig further, you'll also find the instructions to run the audio contamination pipeline, and retrain a model from scratch.
 
-## Installation & extracting predictions
-
-#### Installation
+### Installation
 
 ```
 git clone git@github.com:marianne-m/brouhaha-vad.git
@@ -18,7 +22,7 @@ pip install git+ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/pyannote-brouhaha-
 conda install -c conda-forge libsndfile
 ```
 
-#### Extracting predictions
+### Extracting predictions
 
 ```
 python main.py path/to/predictions apply \
@@ -28,79 +32,7 @@ python main.py path/to/predictions apply \
           --ext "wav"
 ```
 
-## Specifying your database
+### Going further
 
-Your database must have a train/dev/test split. Each set has the following structure :
-
-```
-train/
-├── audio_16k
-│   └── file_1.flac
-│   └── ...
-├── detailed_snr_labels
-│   └── file_1_snr.npy
-│   └── ...
-├── reverb_labels.txt
-└── rttm_files
-    └── file_1.rttm
-    └── ...
-```
-
-Define your database in the `~/.pyannote/database.yml` file with this line :
-
-```
-Databases:
-  Brouhaha: Path/to/your/database
-```
-
-
-## Training
-
-To train the model, use the following command :
-
-```
-python main.py runs/brouhaha/ train \
-    -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
-    --classes brouhaha \
-    --model_type pyannet \
-    --epoch NB_OF_EPOCH_MAX \
-    --data_dir "path/to/your/database/*/audio_16k/{uri}.flac"
-```
-
-#### Use a config.yaml
-
-You can train your model with specific model hyper-parameters and 
-specific task parameters. 
-To do so, put a `config.yaml` in your experimental directory, as the following one :
-
-```
-task:
-  duration: 2.0
-  batch_size: 64
-architecture:
-  sincnet:
-    stride: 10
-    sample_rate: 16000
-  lstm:
-    hidden_size: 128
-    num_layers: 2
-    bidirectional: true
-    monolithic: true
-    dropout: 0.0
-    batch_first: true
-  linear:
-    hidden_size: 128
-    num_layers: 2
-```
-
-And use the `--config` command when launching the training :
-
-```
-python main.py runs/brouhaha/ train \
-    -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
-    --classes brouhaha \
-    --model_type pyannet \
-    --epoch NB_OF_EPOCH_MAX \
-    --data_dir "path/to/your/database" \
-    --config
-```
+1) [Run the audio contamination pipeline](https://github.com/marianne-m/brouhaha-maker)
+2) [Train your own model](./docs/training.md)
