@@ -10,5 +10,5 @@ python main.py runs/brouhaha/ train \
 -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
 --classes brouhaha \
 --model_type pyannet \
---epoch 100 \
+--epoch 35 \
 --data_dir "/gpfsscratch/rech/xdz/uzm31mf/final_dataset/NoisyDataset"
