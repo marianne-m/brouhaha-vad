@@ -20,10 +20,10 @@ pip install git+ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/pyannote-brouhaha-
 
 ```
 python main.py path/to/predictions apply \
-          --model_path models/dur_6_bs_64_lstm_hs_256_lstm_nl_3_dropout_0.5/checkpoints/
+          --model_path models/best/checkpoints/best.ckpt \
           --classes brouhaha \
-          --apply_folder path/to/predictions \
-          --data_dir path/to/data
+          --data_dir path/to/data \
+          --ext "wav"
 ```
 
 ## Specifying your database
