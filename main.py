@@ -297,13 +297,15 @@ class ApplyCommand(BaseCommand):
         parser.add_argument("-m", "--model_path", type=Path, required=True,
                             help="Model checkpoint to run pipeline with")
         parser.add_argument("--params", type=Path,
-                            help="Path to best params. Default to EXP_DIR/best_params.yml")
+                            help="Path to best params. Default to params optimized on Brouhaha")
         parser.add_argument("--apply_folder", type=Path,
                             help="Path to apply folder")
         parser.add_argument("--data_dir", type=str, required=True,
                             help="Path to the data directory")
         parser.add_argument("--recursive", action="store_true",
                             help="If --recursive option is used, apply recursively to the data_dir")
+        parser.add_argument("--ext", type=str, default="wav",
+                            help="Extension of the audiofile in data_dir. Default : wav")
         parser.add_argument("--set", type=str, default="test",
                             help="Apply the model to this set. Possible values : dev, test, heldout. Default : test")
 
@@ -322,9 +324,9 @@ class ApplyCommand(BaseCommand):
             def iter():
                 files = []
                 if args.recursive:
-                    files.extend(Path(args.data_dir).glob("**/*.wav"))
+                    files.extend(Path(args.data_dir).glob(f"**/*.{args.ext}"))
                 else:
-                    files.extend(Path(args.data_dir).glob("*.wav"))
+                    files.extend(Path(args.data_dir).glob(f"*.{args.ext}"))
                 for file in files:
                     yield {
                         "uri": file.stem,
@@ -338,11 +340,9 @@ class ApplyCommand(BaseCommand):
         )
         pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
 
-        if args.params is None:
-            params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
-        else:
+        if args.params is not None:
             params_path = Path(args.params)
-        pipeline.load_params(params_path)
+            pipeline.load_params(params_path)
 
         apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
         apply_folder.mkdir(parents=True, exist_ok=True)
