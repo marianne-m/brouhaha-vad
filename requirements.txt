@@ -20,5 +20,5 @@ torch_audiomentations >= 0.11.0
 torchaudio >=0.10,<1.0
 torchmetrics >=0.6,<1.0
 typing_extensions
-git+ssh://git@github.com/pyannote/pyannote-audio.git@develop#egg=pyannote.audio
+https://github.com/pyannote/pyannote-audio.git@develop#egg=pyannote.audio
 # git+ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/brouhaha-vtc.git#egg=pyannote.db.brouhaha
