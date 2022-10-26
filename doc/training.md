@@ -1,5 +1,12 @@
 ## Specifying your database
 
+First, you must install the pyannote-brouhaha-db package which contains all the necessary instructions to loop through Brouhaha data:
+
+```bash
+conda activate brouhaha-vad
+pip install git+ssh://git@gitlab.cognitive-ml.fr:1022/htiteux/pyannote-brouhaha-db.git
+```
+
 Your database must have a train/dev/test split. Each set must have the following tree structure :
 
 ```
