@@ -35,4 +35,4 @@ python main.py path/to/predictions apply \
 ### Going further
 
 1) [Run the audio contamination pipeline](https://github.com/marianne-m/brouhaha-maker)
-2) [Train your own model](./docs/training.md)
+2) [Train your own model](./doc/training.md)
