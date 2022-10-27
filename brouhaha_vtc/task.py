@@ -32,26 +32,7 @@ MAX_ERROR_C50 = C50_MAX - C50_MIN
 
 
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
-    # TODO
 
-    # TODO: look into `default_loss` and `setup_loss_func` for the task
-    # Look into batch related function (batch, chunck, collate...)
-    # Chunck : original method (super or surcharge)
-    # Loss : BCE for VAD, MSE for C50 and SNR
-    # Loss_vad + lambda Loss_snr + lambda Loss_c50 -> pour l'instant que des 1, on fera un gridsearch
-    # Create a mask for snr loss when there is no speech
-    # We want to log all the losses
-    # apply mask to the linear_snr & to Y
-
-    # Before the 8th
-    # Task
-    # Model
-    # Database
-
-    # For the 8th, first graphs that show losses for VAD, snr, c50 that decreases
-    # for now, let's forget about the masks :
-    # Hadrien says you can harass him if you're stuck!
-    # Bon courage!
     def __init__(
         self,
         protocol: Protocol,
