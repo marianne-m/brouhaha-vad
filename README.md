@@ -2,7 +2,7 @@
 
 ![](doc/brouhaha.png)
 
-Here's the companion repository of *Brouhaha*. 
+Here's the companion repository of [*Brouhaha*](https://arxiv.org/abs/2210.13248). 
 You'll find the instructions to install and run our pretrained model. Given an audio segment, Brouhaha extracts:
 - speech/non-speech segments.
 - Speech-to-Noise Ratio (SNR) , that measures the speech level compared to the noise level.. 
