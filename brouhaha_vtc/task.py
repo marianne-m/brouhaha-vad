@@ -78,9 +78,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             resolution=Resolution.FRAME,
             duration=self.duration,
             warm_up=self.warm_up,
-            classes=[
-                "speech",
-            ],
+            classes=['vad', 'snr', 'c50']
         )
 
     def collate_y(self, batch) -> torch.Tensor:

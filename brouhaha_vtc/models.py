@@ -73,7 +73,8 @@ class RegressiveSegmentationModelMixin(Model):
         """
         Debug architecture
         """
-        self.classifier = CustomClassifier(32 * 2, len(self.specifications.classes))
+        nb_classif = len(set(self.specifications.classes) - set(['snr', 'c50']))
+        self.classifier = CustomClassifier(32 * 2, nb_classif)
         self.activation = CustomActivation()
     
 
@@ -89,6 +90,6 @@ class CustomPyanNetModel(RegressiveSegmentationModelMixin, PyanNet):
             in_features = self.hparams.lstm["hidden_size"] * (
                 2 if self.hparams.lstm["bidirectional"] else 1
             )
-
-        self.classifier = CustomClassifier(in_features, len(self.specifications.classes))
+        nb_classif = len(set(self.specifications.classes) - set(['snr', 'c50']))
+        self.classifier = CustomClassifier(in_features, nb_classif)
         self.activation = CustomActivation()
