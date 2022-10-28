@@ -14,7 +14,7 @@ If you want to dig further, you'll also find the instructions to run the audio c
 
 ### Installation
 
-```
+```sh
 git clone https://github.com/marianne-m/brouhaha-vad.git
 cd brouhaha-vad
 conda env create -f environment.yml
@@ -22,9 +22,9 @@ conda activate brouhaha-vad
 conda install -c conda-forge libsndfile
 ```
 
-### Extracting predictions
+### Extract predictions
 
-```
+```sh
 python main.py path/to/predictions apply \
           --model_path models/best/checkpoints/best.ckpt \
           --classes brouhaha \
