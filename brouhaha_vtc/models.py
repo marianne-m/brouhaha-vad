@@ -1,16 +1,10 @@
-from turtle import forward
-from typing import Optional
-from pyannote.audio import Model
-from pyannote.audio.core.task import Specifications
-from pyannote.audio.models.segmentation import PyanNet
-from pyannote.audio.models.segmentation.debug import SimpleSegmentationModel
-from pyannote.audio.core.task import Task
-
-from einops import rearrange
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from einops import rearrange
+from pyannote.audio import Model
+from pyannote.audio.models.segmentation import PyanNet
+from pyannote.audio.models.segmentation.debug import SimpleSegmentationModel
 
 SNR_MIN = -15
 SNR_MAX = 80

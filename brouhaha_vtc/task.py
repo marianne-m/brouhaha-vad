@@ -1,31 +1,20 @@
 import itertools
-from re import T
+from typing import Dict, Sequence, Text, Tuple, Union
 
-from typing import Dict, Optional, Sequence, Text, Tuple, Union
-
+import numpy as np
 import torch
 import yaml
+from pyannote.audio.core.io import AudioFile
+from pyannote.audio.core.task import Problem, Resolution, Specifications, Task
+from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
+from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
+from pyannote.core import Segment, SlidingWindowFeature
 from pyannote.database import Protocol
 from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
 from torchmetrics import Metric
-import torchmetrics.functional as F
 
-from pyannote.audio.core.task import Problem, Resolution, Specifications, Task
-from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
-from pyannote.audio.core.io import AudioFile
-from pyannote.core import Segment, SlidingWindowFeature
-
-from brouhaha_vtc.models import C50_MAX, C50_MIN, SNR_MAX, SNR_MIN
-
-from .utils.metrics import CustomAUROC, CustomMeanAbsoluteError, OptimalFScore, OptimalFScoreThreshold
-
-
-
-from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
-
-import numpy as np
-import yaml
-
+from .models import C50_MAX, C50_MIN, SNR_MAX, SNR_MIN
+from .utils.metrics import CustomMeanAbsoluteError, OptimalFScore, OptimalFScoreThreshold
 
 MAX_ERROR_SNR = SNR_MAX - SNR_MIN
 MAX_ERROR_C50 = C50_MAX - C50_MIN

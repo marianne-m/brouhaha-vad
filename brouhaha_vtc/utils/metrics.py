@@ -1,13 +1,11 @@
-from typing import Dict, Optional, Sequence, Text, Tuple, Union, Any, Callable, List
 from numbers import Number
-
-from torchmetrics.functional.classification.f_beta import _safe_divide
+from typing import Optional, List
 
 import torch
-from torchmetrics import Metric
 import torchmetrics.functional as F
+from torchmetrics import Metric
+from torchmetrics.functional.classification.f_beta import _safe_divide
 from torchmetrics.functional.regression.mae import _mean_absolute_error_compute
-
 
 
 class CustomAUROC(Metric):

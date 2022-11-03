@@ -1,39 +1,23 @@
-import tempfile
-from copy import deepcopy
-from types import MethodType
 from typing import Optional, Union, Callable
 
 import numpy as np
-import yaml
-from pytorch_lightning import Trainer
-from torch.optim import SGD
-from torch_audiomentations.core.transforms_interface import BaseWaveformTransform
-
 from pyannote.audio import Inference
-from pyannote.audio.core.callback import GraduallyUnfreeze
 from pyannote.audio.core.io import AudioFile
 from pyannote.audio.core.pipeline import Pipeline
 from pyannote.audio.pipelines.utils import (
-    PipelineAugmentation,
-    PipelineInference,
     PipelineModel,
-    get_augmentation,
     get_devices,
-    get_inference,
     get_model,
 )
-from pyannote.audio.tasks import VoiceActivityDetection as VoiceActivityDetectionTask
 from pyannote.audio.utils.signal import Binarize
-from pyannote.audio.utils.loss import mse_loss
 from pyannote.core import Annotation, SlidingWindowFeature
-from pyannote.database.protocol import SpeakerDiarizationProtocol
 from pyannote.metrics.detection import (
     DetectionErrorRate,
     DetectionPrecisionRecallFMeasure,
 )
-from pyannote.pipeline.parameter import Categorical, Integer, LogUniform, Uniform
-from brouhaha_vtc.utils.metrics import CustomMeanAbsoluteError, OptimalFScore
+from pyannote.pipeline.parameter import Uniform
 
+from .utils.metrics import CustomMeanAbsoluteError, OptimalFScore
 
 
 class RegressiveActivityDetectionPipeline(Pipeline):
@@ -84,7 +68,7 @@ class RegressiveActivityDetectionPipeline(Pipeline):
 
         self._audio = model.audio
 
-        #  hyper-parameters used for hysteresis thresholding
+        # hyper-parameters used for hysteresis thresholding
         self.onset = Uniform(0.0, 1.0)
         self.offset = Uniform(0.0, 1.0)
 
