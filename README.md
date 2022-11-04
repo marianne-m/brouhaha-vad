@@ -8,7 +8,7 @@ You'll find the instructions to install and run our pretrained model. Given an a
 - Speech-to-Noise Ratio (SNR) , that measures the speech level compared to the noise level.. 
 - C50, that measures to which extent the environment is reverberant
 
-You can listen to some audio samples we generated to train the model [here](https://marvinlvn.github.io/brouhaha/).
+You can listen to some audio samples we generated to train the model [here](https://marvinlvn.github.io/projects/1_project/).
 
 If you want to dig further, you'll also find the instructions to run the audio contamination pipeline, and retrain a model from scratch.
 
