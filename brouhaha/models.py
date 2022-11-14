@@ -17,7 +17,7 @@ class ParametricSigmoid(nn.Module):
         super().__init__()
         self.alpha = alpha
         self.beta = beta
-    
+
     def forward(self, x: torch.Tensor):
         return (self.beta - self.alpha) * F.sigmoid(x) + self.alpha
 
@@ -30,13 +30,13 @@ class CustomClassifier(nn.Module):
             'snr': nn.Linear(in_features, 1),
             'c50': nn.Linear(in_features, 1),
         })
-    
+
     def forward(self, x: torch.Tensor):
         out = dict()
         for mode, linear in self.linears.items():
-            _output = linear(x) 
+            _output = linear(x)
             out[mode] = _output
-        
+
         return out
 
 
@@ -54,7 +54,7 @@ class CustomActivation(nn.Module):
     def forward(self, x: torch.Tensor):
         out = list()
         for mode, activation in self.activations.items():
-            _output = activation(x[mode]) 
+            _output = activation(x[mode])
             out.append(_output)
 
         out = torch.stack(out)
@@ -70,7 +70,7 @@ class RegressiveSegmentationModelMixin(Model):
         nb_classif = len(set(self.specifications.classes) - set(['snr', 'c50']))
         self.classifier = CustomClassifier(32 * 2, nb_classif)
         self.activation = CustomActivation()
-    
+
 
 class CustomSimpleSegmentationModel(RegressiveSegmentationModelMixin, SimpleSegmentationModel):
     pass

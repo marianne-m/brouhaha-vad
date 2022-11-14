@@ -11,6 +11,7 @@ from torchmetrics.functional.regression.mae import _mean_absolute_error_compute
 class CustomAUROC(Metric):
     higher_is_better: Optional[bool] = True
     full_state_update: Optional[bool] = False
+
     def __init__(self, output_transform=None):
         super().__init__()
         self.output_transform = output_transform
@@ -33,9 +34,9 @@ class CustomMeanAbsoluteError(Metric):
     total: torch.Tensor
 
     def __init__(
-        self,
-        output_transform = None,
-        mask = False
+            self,
+            output_transform=None,
+            mask=False
     ) -> None:
         super().__init__()
 
@@ -45,10 +46,10 @@ class CustomMeanAbsoluteError(Metric):
         self.mask = mask
 
     def update(
-        self,
-        preds: torch.Tensor,
-        target: torch.Tensor,
-        weights: torch.Tensor = None
+            self,
+            preds: torch.Tensor,
+            target: torch.Tensor,
+            weights: torch.Tensor = None
     ) -> None:
         """Update state with predictions and targets.
         Args:
@@ -56,11 +57,11 @@ class CustomMeanAbsoluteError(Metric):
             target: Ground truth values
         """
         if self.mask:
-            weights = target[:,:,0].reshape(-1).int()
+            weights = target[:, :, 0].reshape(-1).int()
 
         if self.output_transform:
             preds, target = self.output_transform(preds, target)
-        
+
         abs_error = torch.abs(preds - target)
 
         if weights is not None:
@@ -68,7 +69,7 @@ class CustomMeanAbsoluteError(Metric):
             n_obs = int(weights.sum())
         else:
             n_obs = target.numel()
-        
+
         sum_abs_error = torch.sum(abs_error)
         self.sum_abs_error += sum_abs_error
         self.total += n_obs
@@ -97,15 +98,14 @@ class OptimalFScore(Metric):
     higher_is_better: bool = True
     full_state_update: bool = False
 
-    def __init__(self, threshold: Optional[torch.Tensor] = None, output_transform = None):
+    def __init__(self, threshold: Optional[torch.Tensor] = None, output_transform=None):
         super().__init__()
 
         threshold = threshold or torch.linspace(0.0, 1.0, 51)
         self.add_state("threshold", default=threshold, dist_reduce_fx="mean")
         (num_thresholds,) = threshold.shape
-        
-        self.output_transform = output_transform
 
+        self.output_transform = output_transform
 
         self.add_state(
             "tp",
@@ -129,9 +129,9 @@ class OptimalFScore(Metric):
         )
 
     def update(
-        self,
-        preds: torch.Tensor,
-        target: torch.Tensor,
+            self,
+            preds: torch.Tensor,
+            target: torch.Tensor,
     ) -> None:
         """Compute and accumulate components of diarization error rate
 
@@ -153,7 +153,7 @@ class OptimalFScore(Metric):
         if self.output_transform:
             preds, target = self.output_transform(preds, target)
         tp, fp, tn, fn = stat_scores(preds, target, threshold=self.threshold)
-    
+
         self.tp += tp
         self.tn += tn
         self.fp += fp
@@ -161,7 +161,7 @@ class OptimalFScore(Metric):
 
     def compute(self):
         fscore = _fscore_compute(
-            self.tp,    
+            self.tp,
             self.fp,
             self.tn,
             self.fn,
@@ -186,10 +186,9 @@ class OptimalFScoreThreshold(OptimalFScore):
 
 
 def _compute_preds(
-    preds: torch.Tensor,
-    threshold: torch.Tensor
+        preds: torch.Tensor,
+        threshold: torch.Tensor
 ) -> torch.Tensor:
-
     scalar_threshold = isinstance(threshold, Number)
     if scalar_threshold:
         return (preds > threshold).int()
@@ -201,15 +200,15 @@ def _compute_preds(
 
 
 def _stat_scores_update(
-    preds: torch.Tensor,
-    target: torch.Tensor,
-    reduce: str = "micro"
+        preds: torch.Tensor,
+        target: torch.Tensor,
+        reduce: str = "micro"
 ) -> List[torch.Tensor]:
     if preds.ndim == 1:
         dim = 0
     elif preds.ndim == 2:
         dim = 1
-        
+
     true_pred, false_pred = target == preds, target != preds
     pos_pred, neg_pred = preds == 1, preds == 0
 
@@ -218,14 +217,14 @@ def _stat_scores_update(
 
     tn = (true_pred * neg_pred).sum(dim=dim)
     fn = (false_pred * neg_pred).sum(dim=dim)
-    
+
     return tp.long(), fp.long(), tn.long(), fn.long()
 
 
 def stat_scores(
-    preds: torch.Tensor,
-    target: torch.Tensor,
-    threshold: torch.Tensor
+        preds: torch.Tensor,
+        target: torch.Tensor,
+        threshold: torch.Tensor
 ) -> torch.Tensor:
     preds = _compute_preds(preds, threshold)
     tp, fp, tn, fn = _stat_scores_update(
@@ -244,7 +243,7 @@ def _fscore_compute(tp, fp, tn, fn):
         denom = precision + recall
         if denom == 0:
             denom = 1
-        fscore = 2 *(precision * recall) / denom
+        fscore = 2 * (precision * recall) / denom
     else:
         precision = _safe_divide(tp.float(), (tp + fp))
         recall = _safe_divide(tp.float(), (tp + fn))

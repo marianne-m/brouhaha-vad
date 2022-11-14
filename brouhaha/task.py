@@ -23,21 +23,21 @@ MAX_ERROR_C50 = C50_MAX - C50_MIN
 class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
 
     def __init__(
-        self,
-        protocol: Protocol,
-        duration: float = 2.0,
-        warm_up: Union[float, Tuple[float, float]] = 0.0,
-        balance: Text = None,
-        weight: Text = None,
-        batch_size: int = 32,
-        num_workers: int = None,
-        pin_memory: bool = False,
-        augmentation: BaseWaveformTransform = None,
-        metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
-        max_error_snr: int = MAX_ERROR_SNR,
-        max_error_c50: int = MAX_ERROR_C50,
-        lambda_c50: float=1,
-        lambda_snr: float=1
+            self,
+            protocol: Protocol,
+            duration: float = 2.0,
+            warm_up: Union[float, Tuple[float, float]] = 0.0,
+            balance: Text = None,
+            weight: Text = None,
+            batch_size: int = 32,
+            num_workers: int = None,
+            pin_memory: bool = False,
+            augmentation: BaseWaveformTransform = None,
+            metric: Union[Metric, Sequence[Metric], Dict[str, Metric]] = None,
+            max_error_snr: int = MAX_ERROR_SNR,
+            max_error_c50: int = MAX_ERROR_C50,
+            lambda_c50: float = 1,
+            lambda_snr: float = 1
     ):
 
         super().__init__(
@@ -131,16 +131,16 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             y[b, f, 1] = snr_label
             y[b, f, 2] = c50_label
         """
-        speaker_feat = 1 * (torch.sum(collated_y[:,:,:-2], dim=2, keepdims=False) > 0)
-        snr_feat = collated_y[:,:,-2]
-        c50_feat = collated_y[:,:,-1]
+        speaker_feat = 1 * (torch.sum(collated_y[:, :, :-2], dim=2, keepdims=False) > 0)
+        snr_feat = collated_y[:, :, -2]
+        c50_feat = collated_y[:, :, -1]
         return torch.stack((speaker_feat, snr_feat, c50_feat), dim=2)
 
     def prepare_chunk(
-        self,
-        file: AudioFile,
-        chunk: Segment,
-        duration: float = None
+            self,
+            file: AudioFile,
+            chunk: Segment,
+            duration: float = None
     ) -> dict:
         """Extract audio chunk and corresponding frame-wise labels
 
@@ -184,19 +184,20 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         score = file['target_features']['c50']
         data = np.concatenate((annotations.data, snr.data, np.full(snr.data.shape, score)), axis=1)
 
-        sample['y'] = SlidingWindowFeature(data, annotations.sliding_window, labels = annotations.labels)
+        sample['y'] = SlidingWindowFeature(data, annotations.sliding_window, labels=annotations.labels)
 
         return sample
-    
 
     def set_first_losses(
-        self, specifications: Specifications, target, prediction, weight=None
+            self, specifications: Specifications, target, prediction, weight=None
     ) -> torch.Tensor:
         """Compute and set the first snr_loss and c50_loss for normalization
         """
         print("settings the first losses")
-        self.first_losses_snr.append(float(mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=weight)))
-        self.first_losses_c50.append(float(mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2], weight=weight)))
+        self.first_losses_snr.append(
+            float(mse_loss(prediction[:, :, 1].unsqueeze(dim=2), target[:, :, 1], weight=weight)))
+        self.first_losses_c50.append(
+            float(mse_loss(prediction[:, :, 2].unsqueeze(dim=2), target[:, :, 2], weight=weight)))
 
         self.first_loss_snr = max(self.first_losses_snr)
         self.first_loss_c50 = max(self.first_losses_c50)
@@ -207,9 +208,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         with open(self.model.logger.log_dir + "/first_losses.yaml", "w") as file:
             yaml.dump(first_losses, file)
 
-
     def default_loss(
-        self, specifications: Specifications, target, prediction, weight=None
+            self, specifications: Specifications, target, prediction, weight=None
     ) -> torch.Tensor:
         """Compute the specific loss for the RegressiveActivityDetectionTask
         Three separate losses are computed :
@@ -247,9 +247,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             Mean Square Error normalized by the first value
 
         """
-        loss_vad = binary_cross_entropy(prediction[:,:,0].unsqueeze(dim=2), target[:,:,0])
-        loss_snr = mse_loss(prediction[:,:,1].unsqueeze(dim=2), target[:,:,1], weight=target[:,:,0].unsqueeze(dim=2))
-        loss_c50 = mse_loss(prediction[:,:,2].unsqueeze(dim=2), target[:,:,2])
+        loss_vad = binary_cross_entropy(prediction[:, :, 0].unsqueeze(dim=2), target[:, :, 0])
+        loss_snr = mse_loss(prediction[:, :, 1].unsqueeze(dim=2), target[:, :, 1],
+                            weight=target[:, :, 0].unsqueeze(dim=2))
+        loss_c50 = mse_loss(prediction[:, :, 2].unsqueeze(dim=2), target[:, :, 2])
 
         loss_snr = loss_snr / self.first_loss_snr
         loss_c50 = loss_c50 / self.first_loss_c50
@@ -257,16 +258,16 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         loss = self.lambda_vad * loss_vad + \
                + self.lambda_snr * loss_snr \
                + self.lambda_c50 * loss_c50
-        
+
         return loss, loss_vad, loss_snr, loss_c50
 
     def default_metric(
-        self,
+            self,
     ) -> Union[Metric, Sequence[Metric], Dict[str, Metric]]:
         """Returns the three validation metric"""
 
         def transform(index):
-            return lambda preds, target: (preds[:,:,index].reshape(-1), target[:,:,index].reshape(-1))
+            return lambda preds, target: (preds[:, :, index].reshape(-1), target[:, :, index].reshape(-1))
 
         return {
             "snrValMetric": CustomMeanAbsoluteError(output_transform=transform(1), mask=True),
@@ -298,8 +299,8 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         # - downsample remaining frames
         warm_up_left = round(self.warm_up[0] / self.duration * num_frames)
         warm_up_right = round(self.warm_up[1] / self.duration * num_frames)
-        preds = y_pred[:, warm_up_left : num_frames - warm_up_right : 10]
-        target = y[:, warm_up_left : num_frames - warm_up_right : 10]
+        preds = y_pred[:, warm_up_left: num_frames - warm_up_right: 10]
+        target = y[:, warm_up_left: num_frames - warm_up_right: 10]
 
         output = self.model.validation_metric(
             preds,
@@ -315,10 +316,10 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         )
 
         validation = (
-            self.lambda_vad * (1 - output[f"{self.logging_prefix}vadValMetric"]) \
-            + self.lambda_snr * output[f"{self.logging_prefix}snrValMetric"] / self.max_error_snr \
-            + self.lambda_c50 * output[f"{self.logging_prefix}c50ValMetric"] / self.max_error_c50 \
-        ) / (self.lambda_vad + self.lambda_snr + self.lambda_c50)
+                             self.lambda_vad * (1 - output[f"{self.logging_prefix}vadValMetric"]) \
+                             + self.lambda_snr * output[f"{self.logging_prefix}snrValMetric"] / self.max_error_snr \
+                             + self.lambda_c50 * output[f"{self.logging_prefix}c50ValMetric"] / self.max_error_c50 \
+                         ) / (self.lambda_vad + self.lambda_snr + self.lambda_c50)
 
         self.model.log(
             f"{self.logging_prefix}ValidationMetric",
@@ -337,7 +338,6 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
                 }
             }
             yaml.dump(optimal_th, file)
-
 
     def training_step(self, batch, batch_idx: int):
         """Training step according specific to RegressiveActivityDetectionTask
@@ -383,7 +383,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         warm_up_left = round(self.warm_up[0] / self.duration * num_frames)
         weight[:, :warm_up_left] = 0.0
         warm_up_right = round(self.warm_up[1] / self.duration * num_frames)
-        weight[:, num_frames - warm_up_right :] = 0.0
+        weight[:, num_frames - warm_up_right:] = 0.0
 
         # set first loss for snr and c50
         if self.model.current_epoch == 0 and batch_idx < 10:
@@ -400,7 +400,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         losses = self.default_loss(self.specifications, y, y_pred, weight=weight)
 
         for loss, loss_type in zip(losses, ['Train', 'vad', 'snr', 'c50']):
-            self.model.log( 
+            self.model.log(
                 f"{self.logging_prefix}{loss_type}Loss",
                 loss,
                 on_step=False,

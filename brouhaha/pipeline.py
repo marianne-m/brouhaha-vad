@@ -46,9 +46,9 @@ class RegressiveActivityDetectionPipeline(Pipeline):
     """
 
     def __init__(
-        self,
-        segmentation: PipelineModel = None,
-        **inference_kwargs,
+            self,
+            segmentation: PipelineModel = None,
+            **inference_kwargs,
     ):
         super().__init__()
 
@@ -136,8 +136,8 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         hook("segmentation", segmentations)
 
         speech_seg = SlidingWindowFeature(segmentations.data, segmentations.sliding_window)
-        speech_seg.data = np.expand_dims(speech_seg.data[:,0], axis=1)
-        
+        speech_seg.data = np.expand_dims(speech_seg.data[:, 0], axis=1)
+
         speech: Annotation = self._binarize(speech_seg)
         speech.uri = file["uri"]
 
