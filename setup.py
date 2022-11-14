@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 here = Path(__file__).parent
 
 with open(here / "requirements.txt") as file:
-    requirements = file.read().split()
+    requirements = file.read().splitlines()
 
 with open(here / "README.md") as file:
     readme = file.read()
