@@ -8,10 +8,10 @@ import numpy as np
 import pandas as pd
 import torch
 import yaml
-from brouhaha_vtc.models import CustomPyanNetModel, CustomSimpleSegmentationModel
-from brouhaha_vtc.pipeline import RegressiveActivityDetectionPipeline
-from brouhaha_vtc.task import RegressiveActivityDetectionTask
-from brouhaha_vtc.utils.metrics import OptimalFScore, OptimalFScoreThreshold
+from bouhaha.models import CustomPyanNetModel, CustomSimpleSegmentationModel
+from bouhaha.pipeline import RegressiveActivityDetectionPipeline
+from bouhaha.task import RegressiveActivityDetectionTask
+from bouhaha.utils.metrics import OptimalFScore, OptimalFScoreThreshold
 from pyannote.audio import Model
 from pyannote.audio.utils.preprocessors import DeriveMetaLabels
 from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature, Segment
