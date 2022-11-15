@@ -4,33 +4,27 @@ from argparse import ArgumentParser, Namespace
 from pathlib import Path
 from typing import Dict, List, Any
 
+import numpy as np
+import pandas as pd
 import torch
 import yaml
-from yaml.loader import SafeLoader
-import pandas as pd
-import numpy as np
+from brouhaha_vtc.models import CustomPyanNetModel, CustomSimpleSegmentationModel
+from brouhaha_vtc.pipeline import RegressiveActivityDetectionPipeline
+from brouhaha_vtc.task import RegressiveActivityDetectionTask
+from brouhaha_vtc.utils.metrics import OptimalFScore, OptimalFScoreThreshold
 from pyannote.audio import Model
-from pyannote.audio.models.segmentation import PyanNet
-from pyannote.audio.models.segmentation.debug import SimpleSegmentationModel
-# from pyannote.audio.pipelines import MultiLabelSegmentation as MultilabelDetectionPipeline
-# from pyannote.audio.tasks.segmentation.multilabel import MultiLabelSegmentation
-from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature, Segment
 from pyannote.audio.utils.preprocessors import DeriveMetaLabels
+from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature, Segment
 from pyannote.database import FileFinder, get_protocol, ProtocolFile
 from pyannote.database.protocol.protocol import Preprocessor
-from pyannote.database.util import load_rttm, LabelMapper
+from pyannote.database.util import load_rttm
 from pyannote.metrics.base import BaseMetric
-from pyannote.pipeline import Optimizer
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
-from brouhaha_vtc.models import CustomPyanNetModel, CustomSimpleSegmentationModel
-from brouhaha_vtc.pipeline import RegressiveActivityDetectionPipeline
-
-from brouhaha_vtc.task import RegressiveActivityDetectionTask
-from brouhaha_vtc.utils.metrics import OptimalFScore, OptimalFScoreThreshold
+from yaml.loader import SafeLoader
 
 
 class ProcessorChain:
@@ -50,22 +44,9 @@ class ProcessorChain:
 
 DEVICE = "gpu" if torch.cuda.is_available() else "cpu"
 
-CLASSES = {"vtcdebug": {'classes': ["READER", "AGREER", "DISAGREER"],
-                        'unions': {"COMMENTERS": ["AGREER", "DISAGREER"]},
-                        'intersections': {}},
-           "basal_voice": {'classes': ["P", "NP"],
-                           'unions': {},
-                           'intersections': {}},
-           "babytrain": {'classes': ["MAL", "FEM", "CHI", "KCHI"],
-                         'unions': {"SPEECH": ["MAL", "FEM", "CHI", "KCHI"]},
-                         'intersections': {}},
-           "brouhaha": {'classes': ["A"],
-                        'unions': {},
-                        'intersections': {}},
-           "dihard": {'classes': [f"speaker{n}" for n in range(2000)],
-                        'unions': {"A": [f"speaker{n}" for n in range(2000)]},
-                        'intersections': {}},
-           }
+BROUHAHA_CLASSES = {'classes': ["A"],
+                    'unions': {},
+                    'intersections': {}}
 
 
 class BaseCommand:
@@ -82,19 +63,11 @@ class BaseCommand:
 
     @classmethod
     def get_protocol(cls, args: Namespace):
-        classes_kwargs = CLASSES[args.classes]
-        vad_preprocessor = DeriveMetaLabels(**classes_kwargs)
+        vad_preprocessor = DeriveMetaLabels(**BROUHAHA_CLASSES)
         preprocessors = {
             "audio": FileFinder(),
             "annotation": vad_preprocessor
         }
-        if args.classes == "babytrain":
-            with open(Path(__file__).parent / "data/babytrain_mapping.yml") as mapping_file:
-                mapping_dict = yaml.safe_load(mapping_file)["mapping"]
-            preprocessors["annotation"] = ProcessorChain([
-                LabelMapper(mapping_dict, keep_missing=True),
-                vad_preprocessor
-            ], key="annotation")
         return get_protocol(args.protocol, preprocessors=preprocessors)
 
     @classmethod
@@ -105,18 +78,18 @@ class BaseCommand:
         task.setup()
         return task
 
-    @classmethod 
-    def get_config(cls, args:Namespace):
+    @classmethod
+    def get_config(cls, args: Namespace):
         config_file = args.exp_dir / "config.yaml"
         try:
             with open(config_file) as f:
                 config = yaml.load(f, Loader=SafeLoader)
         except FileNotFoundError:
-            print(f"The config file {config_file} was not found in {args.exp_dir}.\n"
-                  f"If using the --config option, please place a config.yaml file in {args.exp_dir}")
+            logging.warning(f"The config file {config_file} was not found in {args.exp_dir}.\n"
+                            f"If using the --config option, please place a config.yaml file in {args.exp_dir}")
             raise
-        
-        print("Using a custom config file to instantiate the model")
+
+        logging.info("Using a custom config file to instantiate the model")
 
         model_params = config["architecture"] if "architecture" in config else dict()
         task_params = config["task"] if "task" in config else dict()
@@ -129,12 +102,11 @@ class TrainCommand(BaseCommand):
 
     @classmethod
     def init_parser(cls, parser: ArgumentParser):
+        parser.add_argument("exp_dir", type=Path,
+                            help="Experimental folder")
         parser.add_argument("-p", "--protocol", type=str,
                             default="BrouhahaDebug.SpeakerDiarization.RegressionPoetryRecital",
                             help="Pyannote database")
-        parser.add_argument("--classes", choices=CLASSES.keys(),
-                            required=True,
-                            type=str, help="Model architecture")
         parser.add_argument("--model_type", choices=["simple", "pyannet"],
                             required=True,
                             type=str, help="Model model checkpoint")
@@ -153,12 +125,11 @@ class TrainCommand(BaseCommand):
 
     @classmethod
     def run(cls, args: Namespace):
-        print("### Training ###")
 
         model_kwargs, task_kwargs = dict(), dict()
         if args.config:
             model_kwargs, task_kwargs = cls.get_config(args)
- 
+
         vad = cls.get_task(args, task_kwargs)
 
         if args.model_type == "simple":
@@ -195,7 +166,7 @@ class TrainCommand(BaseCommand):
                                    name="VADTest", version="", log_graph=False)
         trainer_kwargs = {'devices': args.gpu,
                           'accelerator': "gpu",
-                          'callbacks': [model_checkpoint], #, early_stopping],
+                          'callbacks': [model_checkpoint, early_stopping],
                           'logger': logger,
                           'max_epochs': args.epoch}
         if args.resume:
@@ -213,12 +184,11 @@ class TuneCommand(BaseCommand):
 
     @classmethod
     def init_parser(cls, parser: ArgumentParser):
+        parser.add_argument("exp_dir", type=Path,
+                            help="Experimental folder")
         parser.add_argument("-p", "--protocol", type=str,
                             default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
                             help="Pyannote database")
-        parser.add_argument("--classes", choices=CLASSES.keys(),
-                            required=True,
-                            type=str, help="Model model checkpoint")
         parser.add_argument("-m", "--model_path", type=Path, required=True,
                             help="Model checkpoint to tune pipeline with")
         parser.add_argument("--params", type=Path,
@@ -236,7 +206,7 @@ class TuneCommand(BaseCommand):
         )
 
         pipeline = RegressiveActivityDetectionPipeline(segmentation=model)
-        
+
         fscore = OptimalFScore()
         opt_threshold = OptimalFScoreThreshold()
 
@@ -244,7 +214,7 @@ class TuneCommand(BaseCommand):
             uri = file['uri']
 
             predicted = pipeline._segmentation(file)
-            pred_vad = predicted[:,0]
+            pred_vad = predicted[:, 0]
 
             # get target annotation
             if not bool(file['annotation']):
@@ -253,20 +223,20 @@ class TuneCommand(BaseCommand):
             else:
                 annot = file['annotation'].discretize(
                     support=Segment(
-                        0.0, pipeline._audio.get_duration(file)# + pipeline._segmentation.step
+                        0.0, pipeline._audio.get_duration(file)  # + pipeline._segmentation.step
                     ),
                     resolution=pipeline._frames,
                 ).align(to=predicted)
 
-            f = fscore(torch.tensor(pred_vad), torch.tensor(annot.data[:,0]))
-            threshold = opt_threshold(torch.tensor(pred_vad), torch.tensor(annot.data[:,0]))
+            f = fscore(torch.tensor(pred_vad), torch.tensor(annot.data[:, 0]))
+            threshold = opt_threshold(torch.tensor(pred_vad), torch.tensor(annot.data[:, 0]))
 
-            print(f'uri\t{uri}\tOptFscore\t{f}\tOptFscore threshold\t{threshold}')
+            logging.debug(f'uri\t{uri}\tOptFscore\t{f}\tOptFscore threshold\t{threshold}')
 
         optimal_threshold = float(opt_threshold.compute())
 
-        print(f'fscore aggregated {fscore.compute()}')
-        print(f'optimal fscore threshold aggregated {optimal_threshold}')
+        logging.info(f'fscore aggregated {fscore.compute()}')
+        logging.info(f'optimal fscore threshold aggregated {optimal_threshold}')
 
         best_params = {
             "params": {
@@ -291,9 +261,6 @@ class ApplyCommand(BaseCommand):
     def init_parser(cls, parser: ArgumentParser):
         parser.add_argument("-p", "--protocol", type=str,
                             help="Pyannote database")
-        parser.add_argument("--classes", choices=CLASSES.keys(),
-                            required=True,
-                            type=str, help="Model model checkpoint")
         parser.add_argument("-m", "--model_path", type=Path, required=True,
                             help="Model checkpoint to run pipeline with")
         parser.add_argument("--params", type=Path,
@@ -332,6 +299,7 @@ class ApplyCommand(BaseCommand):
                         "uri": file.stem,
                         "audio": file
                     }
+
             data_iterator = iter()
 
         model = Model.from_pretrained(
@@ -384,11 +352,6 @@ class ScoreCommand(BaseCommand):
                             help="Pyannote database")
         parser.add_argument("--apply_folder", type=Path,
                             help="Path to the inference files")
-        parser.add_argument("--classes", choices=CLASSES.keys(),
-                            required=True,
-                            type=str, help="Model architecture")
-        parser.add_argument("--metric", choices=["fscore", "ier"],
-                            default="fscore")
         parser.add_argument("--model_path", type=Path, required=True,
                             help="Model model checkpoint")
         parser.add_argument("--report_path", type=Path, required=True,
@@ -460,7 +423,8 @@ class ScoreCommand(BaseCommand):
                 support=file['annotated'][0], resolution=resolution, duration=file['annotated'][0].duration
             )
 
-            mse_snr = metric["snrTestMetric"](torch.tensor(preds.data), torch.tensor(target.data), weights=torch.Tensor(annot.data))
+            mse_snr = metric["snrTestMetric"](torch.tensor(preds.data), torch.tensor(target.data),
+                                              weights=torch.Tensor(annot.data))
             snr_test_metric.append(float(mse_snr))
 
             # score c50
@@ -488,8 +452,7 @@ commands = [TrainCommand, TuneCommand, ApplyCommand, ScoreCommand]
 argparser = argparse.ArgumentParser()
 argparser.add_argument("-v", "--verbose", action="store_true",
                        help="Show debug information in the standard output")
-argparser.add_argument("exp_dir", type=Path,
-                       help="Experimental folder")
+
 subparsers = argparser.add_subparsers()
 
 for command in commands:
