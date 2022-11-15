@@ -15,10 +15,25 @@ If you want to dig further, you'll also find the instructions to run the audio c
 ### Installation
 
 ```
+# clone brouhaha
 git clone https://github.com/marianne-m/brouhaha-vad.git
 cd brouhaha-vad
-conda env create -f environment.yml
+
+# create an environment : either a conda env or a virtual env
+# creating a conda environment
+conda env create -n brouhaha python=3.8
 conda activate brouhaha-vad
+
+# creating a virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# install brouhaha
+pip install .
+```
+
+If you use the Jean Zay cluster, it may be necessary to install libsndfile with the following command:
+```
 conda install -c conda-forge libsndfile
 ```
 
