@@ -2,7 +2,7 @@ import argparse
 import logging
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -15,8 +15,7 @@ from brouhaha_vtc.utils.metrics import OptimalFScore, OptimalFScoreThreshold
 from pyannote.audio import Model
 from pyannote.audio.utils.preprocessors import DeriveMetaLabels
 from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature, Segment
-from pyannote.database import FileFinder, get_protocol, ProtocolFile
-from pyannote.database.protocol.protocol import Preprocessor
+from pyannote.database import FileFinder, get_protocol
 from pyannote.database.util import load_rttm
 from pyannote.metrics.base import BaseMetric
 from pytorch_lightning import Trainer
@@ -25,22 +24,6 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
 from yaml.loader import SafeLoader
-
-
-class ProcessorChain:
-
-    def __init__(self, preprocessors: List[Preprocessor], key: str):
-        self.procs = preprocessors
-        self.key = key
-
-    def __call__(self, file: ProtocolFile):
-        file_cp: Dict[str, Any] = abs(file)
-        for proc in self.procs:
-            out = proc(file_cp)
-            file_cp[self.key] = out
-
-        return out
-
 
 DEVICE = "gpu" if torch.cuda.is_available() else "cpu"
 
