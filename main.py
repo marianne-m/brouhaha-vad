@@ -8,10 +8,6 @@ import numpy as np
 import pandas as pd
 import torch
 import yaml
-from brouhaha.models import CustomPyanNetModel, CustomSimpleSegmentationModel
-from brouhaha.pipeline import RegressiveActivityDetectionPipeline
-from brouhaha.task import RegressiveActivityDetectionTask
-from brouhaha.utils.metrics import OptimalFScore, OptimalFScoreThreshold
 from pyannote.audio import Model
 from pyannote.audio.utils.preprocessors import DeriveMetaLabels
 from pyannote.core import Annotation, SlidingWindow, SlidingWindowFeature, Segment
@@ -24,6 +20,11 @@ from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 from tqdm import tqdm
 from yaml.loader import SafeLoader
+
+from brouhaha.models import CustomPyanNetModel, CustomSimpleSegmentationModel
+from brouhaha.pipeline import RegressiveActivityDetectionPipeline
+from brouhaha.task import RegressiveActivityDetectionTask
+from brouhaha.utils.metrics import OptimalFScore, OptimalFScoreThreshold
 
 DEVICE = "gpu" if torch.cuda.is_available() else "cpu"
 
@@ -46,10 +47,9 @@ class BaseCommand:
 
     @classmethod
     def get_protocol(cls, args: Namespace):
-        vad_preprocessor = DeriveMetaLabels(**BROUHAHA_CLASSES)
         preprocessors = {
             "audio": FileFinder(),
-            "annotation": vad_preprocessor
+            "annotation": DeriveMetaLabels(**BROUHAHA_CLASSES)
         }
         return get_protocol(args.protocol, preprocessors=preprocessors)
 
@@ -247,11 +247,12 @@ class ApplyCommand(BaseCommand):
         parser.add_argument("-m", "--model_path", type=Path, required=True,
                             help="Model checkpoint to run pipeline with")
         parser.add_argument("--params", type=Path,
-                            help="Path to best params. Default to params optimized on Brouhaha")
+                            help="Path to best pipelin hyperparameters. "
+                                 "Defaults to hyperparameters optimized on Brouhaha")
         parser.add_argument("--apply_folder", type=Path,
-                            help="Path to apply folder")
+                            help="Path to inference output folder")
         parser.add_argument("--data_dir", type=str, required=True,
-                            help="Path to the data directory")
+                            help="Path to the input data directory on which to run the command")
         parser.add_argument("--recursive", action="store_true",
                             help="If --recursive option is used, apply recursively to the data_dir")
         parser.add_argument("--ext", type=str, default="wav",
@@ -341,8 +342,8 @@ class ScoreCommand(BaseCommand):
                             help="Path to report csv")
         parser.add_argument("--data_dir", type=str, required=True,
                             help="Path to the data directory")
-        parser.add_argument("--set", type=str, default="test",
-                            help="Apply the model to this set. Possible values : dev, test, heldout. Default : test")
+        parser.add_argument("--set", type=str, default="test", choices=["dev", "test"],
+                            help="Apply the model to this set.")
 
     @classmethod
     def run(cls, args: Namespace):

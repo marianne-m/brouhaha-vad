@@ -37,7 +37,7 @@ conda install -c conda-forge libsndfile
 ```
 python main.py path/to/predictions apply \
           --model_path models/best/checkpoints/best.ckpt \
-          --classes brouhaha \
+          --apply_dir path/to/inferences
           --data_dir path/to/data \
           --ext "wav"
 ```
