@@ -242,23 +242,23 @@ class ApplyCommand(BaseCommand):
 
     @classmethod
     def init_parser(cls, parser: ArgumentParser):
-        parser.add_argument("-p", "--protocol", type=str,
-                            help="Pyannote database")
-        parser.add_argument("-m", "--model_path", type=Path, required=True,
-                            help="Model checkpoint to run pipeline with")
-        parser.add_argument("--params", type=Path,
-                            help="Path to best pipelin hyperparameters. "
-                                 "Defaults to hyperparameters optimized on Brouhaha")
-        parser.add_argument("--apply_folder", type=Path,
-                            help="Path to inference output folder")
         parser.add_argument("--data_dir", type=str, required=True,
-                            help="Path to the input data directory on which to run the command")
-        parser.add_argument("--recursive", action="store_true",
-                            help="If --recursive option is used, apply recursively to the data_dir")
+                            help="Path to the data directory")
+        parser.add_argument("--out_dir", type=Path, required=True,
+                            help="Path to the inference output folder")
+        parser.add_argument("-m", "--model_path", type=Path, required=True,
+                            help="Model checkpoint to run the pipeline with")
         parser.add_argument("--ext", type=str, default="wav",
                             help="Extension of the audiofile in data_dir. Default : wav")
-        parser.add_argument("--set", type=str, default="test",
-                            help="Apply the model to this set. Possible values : dev, test, heldout. Default : test")
+        parser.add_argument("--params", type=Path,
+                            help="Path to best pipeline hyperparameters."
+                                 "Defaults to hyperparameters optimized on Brouhaha")
+        parser.add_argument("--recursive", action="store_true",
+                            help="If --recursive option is used, apply recursively to the data_dir")
+        parser.add_argument("-p", "--protocol", type=str,
+                            help="Pyannote database")
+        parser.add_argument("--set", type=str, default="test", choices=["dev", "test"],
+                            help="If using a pyannote protocol, apply the model to this set. Default : test")
 
     @classmethod
     def run(cls, args: Namespace):
@@ -296,7 +296,7 @@ class ApplyCommand(BaseCommand):
             params_path = Path(args.params)
             pipeline.load_params(params_path)
 
-        apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
+        apply_folder = Path(args.out_dir)
         apply_folder.mkdir(parents=True, exist_ok=True)
 
         rttm_folder = apply_folder / "rttm_files"
