@@ -1,3 +1,5 @@
+[![Installation Testing](https://github.com/marianne-m/brouhaha-vad/actions/workflows/setup.yml/badge.svg)](https://github.com/marianne-m/brouhaha-vad/actions/workflows/setup.yml)
+
 # Brouhaha: multi-task training for voice activity detection, speech-to-noise ratio, and C50 room acoustics estimation (2023)
 
 ![](doc/brouhaha.png)
