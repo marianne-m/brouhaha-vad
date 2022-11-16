@@ -27,7 +27,7 @@ conda activate brouhaha-vad
 pip install .
 ```
 
-If you use the Jean Zay cluster, it may be necessary to install libsndfile with the following command:
+Depending on the environment you're running the model in, it may be necessary to install libsndfile with the following command:
 ```
 conda install -c conda-forge libsndfile
 ```
