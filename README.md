@@ -19,14 +19,9 @@ If you want to dig further, you'll also find the instructions to run the audio c
 git clone https://github.com/marianne-m/brouhaha-vad.git
 cd brouhaha-vad
 
-# create an environment : either a conda env or a virtual env
 # creating a conda environment
 conda env create -n brouhaha python=3.8
 conda activate brouhaha-vad
-
-# creating a virtual environment
-python3 -m venv venv
-source venv/bin/activate
 
 # install brouhaha
 pip install .
