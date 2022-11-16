@@ -35,7 +35,7 @@ conda install -c conda-forge libsndfile
 ### Extract predictions
 
 ```
-python main.py path/to/predictions apply \
+python main.py apply \
           --model_path models/best/checkpoints/best.ckpt \
           --apply_dir path/to/inferences
           --data_dir path/to/data \
