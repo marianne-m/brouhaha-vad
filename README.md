@@ -4,8 +4,8 @@
 
 Here's the companion repository of [*Brouhaha*](https://arxiv.org/abs/2210.13248). 
 You'll find the instructions to install and run our pretrained model. Given an audio segment, Brouhaha extracts:
-- speech/non-speech segments.
-- Speech-to-Noise Ratio (SNR) , that measures the speech level compared to the noise level.. 
+- speech/non-speech segments
+- Speech-to-Noise Ratio (SNR) , that measures the speech level compared to the noise level
 - C50, that measures to which extent the environment is reverberant
 
 You can listen to some audio samples we generated to train the model [here](https://marvinlvn.github.io/projects/1_project/).
@@ -19,20 +19,15 @@ If you want to dig further, you'll also find the instructions to run the audio c
 git clone https://github.com/marianne-m/brouhaha-vad.git
 cd brouhaha-vad
 
-# create an environment : either a conda env or a virtual env
 # creating a conda environment
 conda env create -n brouhaha python=3.8
 conda activate brouhaha-vad
-
-# creating a virtual environment
-python3 -m venv venv
-source venv/bin/activate
 
 # install brouhaha
 pip install .
 ```
 
-If you use the Jean Zay cluster, it may be necessary to install libsndfile with the following command:
+Depending on the environment you're running the model in, it may be necessary to install libsndfile with the following command:
 ```
 conda install -c conda-forge libsndfile
 ```
