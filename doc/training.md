@@ -3,7 +3,7 @@
 First, you must install the pyannote-brouhaha-db package which contains all the necessary instructions to loop through Brouhaha data:
 
 ```bash
-conda activate brouhaha-vad
+conda activate brouhaha
 pip install git+ssh://git@github.com:marianne-m/pyannote-brouhaha-db.git
 ```
 
@@ -27,7 +27,7 @@ Define your database in the `~/.pyannote/database.yml` file with this line :
 
 ```
 Databases:
-  Brouhaha: Path/to/your/database
+  Brouhaha: Path/to/your/database/*/audio_16k/{uri}.flac
 ```
 
 
@@ -38,10 +38,9 @@ To train the model, use the following command :
 ```
 python main.py /path/to/model train \
     -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
-    --classes brouhaha \
     --model_type pyannet \
     --epoch 35 \
-    --data_dir "path/to/your/database/*/audio_16k/{uri}.flac"
+    --data_dir "path/to/your/database"
 ```
 
 #### Use a config.yaml
@@ -74,7 +73,6 @@ And use the `--config` command when launching the training :
 ```
 python main.py runs/brouhaha/ train \
     -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
-    --classes brouhaha \
     --model_type pyannet \
     --epoch NB_OF_EPOCH_MAX \
     --data_dir "path/to/your/database" \
