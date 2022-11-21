@@ -36,7 +36,7 @@ Databases:
 To train the model, use the following command :
 
 ```
-python main.py /path/to/model train \
+python main.py train /path/to/exp_dir \
     -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
     --model_type pyannet \
     --epoch 35 \
@@ -52,6 +52,7 @@ To do so, put a `config.yaml` in your experimental directory, as the following o
 task:
   duration: 2.0
   batch_size: 64
+  lambda_vad: 1
 architecture:
   sincnet:
     stride: 10
