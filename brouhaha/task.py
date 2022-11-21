@@ -332,14 +332,6 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
             logger=True,
         )
 
-        with open(self.model.logger.log_dir + "/vad_fscore_threshold.yaml", "a") as file:
-            optimal_th = {
-                f"epoch_{self.model.current_epoch}": {
-                    "fscore": float(output[f"{self.logging_prefix}vadValMetric"]),
-                    "optimal_th": float(output[f"{self.logging_prefix}vadOptiTh"])
-                }
-            }
-            yaml.dump(optimal_th, file)
 
     def training_step(self, batch, batch_idx: int):
         """Training step according specific to RegressiveActivityDetectionTask
