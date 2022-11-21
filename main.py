@@ -334,14 +334,14 @@ class ScoreCommand(BaseCommand):
         parser.add_argument("-p", "--protocol", type=str,
                             default="VTCDebug.SpeakerDiarization.PoetryRecitalDiarization",
                             help="Pyannote database")
-        parser.add_argument("--apply_folder", type=Path,
-                            help="Path to the inference files")
-        parser.add_argument("--model_path", type=Path, required=True,
-                            help="Model model checkpoint")
-        parser.add_argument("--report_path", type=Path, required=True,
-                            help="Path to report csv")
+        parser.add_argument("--out_dir", type=Path, required=True,
+                            help="Path to the inference output folder")
+        parser.add_argument("-m", "--model_path", type=Path, required=True,
+                            help="Model checkpoint to run the pipeline with")
         parser.add_argument("--data_dir", type=str, required=True,
                             help="Path to the data directory")
+        parser.add_argument("--report_path", type=Path, required=True,
+                            help="Path to the score files")
         parser.add_argument("--set", type=str, default="test", choices=["dev", "test"],
                             help="Apply the model to this set.")
 
@@ -350,7 +350,7 @@ class ScoreCommand(BaseCommand):
         protocol = cls.get_protocol(args)
         protocol.data_dir = Path(args.data_dir)
 
-        apply_folder: Path = args.exp_dir / "apply/" if args.apply_folder is None else args.apply_folder
+        apply_folder: Path = args.out_dir
 
         rttm_folder = apply_folder / "rttm_files"
         snr_folder = apply_folder / "detailed_snr_labels"

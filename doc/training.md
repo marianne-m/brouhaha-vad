@@ -36,7 +36,7 @@ Databases:
 To train the model, use the following command :
 
 ```
-python main.py train /path/to/exp_dir \
+python main.py train /path/to/experimental/directory \
     -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
     --model_type pyannet \
     --epoch 35 \
@@ -72,10 +72,56 @@ architecture:
 And use the `--config` command when launching the training :
 
 ```
-python main.py runs/brouhaha/ train \
+python main.py train runs/brouhaha/ \
     -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
     --model_type pyannet \
     --epoch NB_OF_EPOCH_MAX \
     --data_dir "path/to/your/database" \
     --config
+```
+
+## Tuning
+
+Once the model is trained, you can tune the threshold for the voice activity detection with the following command :
+
+```
+python main.py tune /path/to/experimental/directory \
+    -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
+    --model_path path/to/the/model/checkpoint \
+    --data_dir path/to/your/database \
+    --params path/to/best/params/yaml/file
+```
+
+If the `--params` flag is not specified, the best parameters will be saved in the file `best_params.yml` in the experimental
+directory.
+
+
+## Apply the model
+
+You can apply the model on the test part of your pyannote database like this : 
+```
+python main.py apply \
+    -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
+    --model_path path/to/the/model/checkpoint \
+    --data_dir path/to/your/database \
+    --out_dir path/to/the/inference/output/folder \
+    --ext "wav" \
+    --params path/to/best/params/yaml/file
+```
+
+If the `--params` is not specified, the parameters tuned on the Brouhaha database will be used.
+
+
+## Score the model
+
+Finally, you can score your model and compute the F-Score for the Voice Activity Detection, the Mean Squared Error for the
+SNR and the Mean Squared Error for the C50.
+
+```
+python main.py score \
+    -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
+    --model_path path/to/the/model/checkpoint \
+    --data_dir path/to/your/database \
+    --out_dir path/to/the/inference/output/folder \
+    --report_path path/to/score/files
 ```
