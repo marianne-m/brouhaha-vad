@@ -63,7 +63,7 @@ class RegressiveActivityDetectionTask(SegmentationTaskMixin, Task):
         self.lambda_vad = lambda_vad
         self.lambda_snr = lambda_snr
         self.lambda_c50 = lambda_c50
-        print("set lambda vad : ", self.lambda_vad)
+
         self.specifications = Specifications(
             problem=Problem.MULTI_LABEL_CLASSIFICATION,
             resolution=Resolution.FRAME,
