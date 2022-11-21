@@ -22,8 +22,8 @@ git clone https://github.com/marianne-m/brouhaha-vad.git
 cd brouhaha-vad
 
 # creating a conda environment
-conda env create -n brouhaha python=3.8
-conda activate brouhaha-vad
+conda create -n brouhaha python=3.8
+conda activate brouhaha
 
 # install brouhaha
 pip install .
