@@ -4,7 +4,7 @@ First, you must install the pyannote-brouhaha-db package which contains all the 
 
 ```bash
 conda activate brouhaha
-pip install git+ssh://git@github.com:marianne-m/pyannote-brouhaha-db.git
+pip install [git+ssh://git@github.com:marianne-m/pyannote-brouhaha-db.git](https://github.com/marianne-m/pyannote-brouhaha-db.git)
 ```
 
 Your database must have a train/dev/test split. Each set must have the following tree structure :
@@ -40,7 +40,7 @@ python main.py train /path/to/experimental/directory \
     -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
     --model_type pyannet \
     --epoch 35 \
-    --data_dir "path/to/your/database"
+    --data_dir path/to/your/database
 ```
 
 #### Use a config.yaml
@@ -72,11 +72,11 @@ architecture:
 And use the `--config` command when launching the training :
 
 ```
-python main.py train runs/brouhaha/ \
+python main.py train /path/to/experimental/directory \
     -p Brouhaha.SpeakerDiarization.NoisySpeakerDiarization \
     --model_type pyannet \
-    --epoch NB_OF_EPOCH_MAX \
-    --data_dir "path/to/your/database" \
+    --epoch 35 \
+    --data_dir path/to/your/database \
     --config
 ```
 
@@ -105,7 +105,7 @@ python main.py apply \
     --model_path path/to/the/model/checkpoint \
     --data_dir path/to/your/database \
     --out_dir path/to/the/inference/output/folder \
-    --ext "wav" \
+    --ext wav \
     --params path/to/best/params/yaml/file
 ```
 
