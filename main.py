@@ -278,6 +278,14 @@ class ApplyCommand(BaseCommand):
                     files.extend(Path(args.data_dir).glob(f"**/*.{args.ext}"))
                 else:
                     files.extend(Path(args.data_dir).glob(f"*.{args.ext}"))
+
+                if not files:
+                    logging.error(f"No file found in {args.data_dir}.\n"
+                                   "Please check that the correct extension is set with the --ext flag. Currently looking"
+                                  f"for files with '{args.ext}' extension.\n"
+                                   "If the audio files are in subdirectories, use the --recursive flag.")
+                    exit(1)
+
                 for file in files:
                     yield {
                         "uri": file.stem,
