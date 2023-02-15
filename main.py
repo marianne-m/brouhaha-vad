@@ -230,10 +230,9 @@ class TuneCommand(BaseCommand):
             }
         }
 
-        if args.params is None:
-            params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
-            with open(params_path, "w") as file:
-                yaml.dump(best_params, file)
+        params_path: Path = args.params if args.params is not None else args.exp_dir / "best_params.yml"
+        with open(params_path, "w") as file:
+            yaml.dump(best_params, file)
 
 
 class ApplyCommand(BaseCommand):
