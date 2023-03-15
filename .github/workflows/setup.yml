@@ -31,4 +31,4 @@ jobs:
           sudo apt install -y libsndfile1 libsndfile1-dev
           pip install --upgrade pip
           pip install .
-          python main.py --help
+          python brouhaha/main.py --help
