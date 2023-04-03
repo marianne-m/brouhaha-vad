@@ -37,11 +37,11 @@ conda install -c conda-forge libsndfile
 ### Extract predictions
 
 ```
-python ./brouhaha/main.py apply \
+python brouhaha/main.py apply \
       --data_dir path/to/data \
       --out_dir path/to/predictions \
       --model_path models/best/checkpoints/best.ckpt \
-      --ext "wav"
+      --ext wav
 ```
 
 ### Going further
