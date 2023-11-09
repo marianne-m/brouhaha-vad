@@ -64,7 +64,12 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         #     scores, axis=-1, keepdims=True
         # )
         self._segmentation = Inference(model, **inference_kwargs)
-        self._frames = self._segmentation.model.introspection.frames
+
+        # adapt brouhaha to pyannote.audio==3.0.0
+        if hasattr(self._segmentation.model, "introspection"):
+            self._frames = self._segmentation.model.introspection.frames
+        else:
+            self._frames = self._segmentation.model.example_output.frames
 
         self._audio = model.audio
 
