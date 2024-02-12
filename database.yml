@@ -1,0 +1,21 @@
+Databases:
+  Brouhaha: /home/deivison/workspace/VAD/DALI_database/*/audio_16k/{uri}.flac
+
+Protocols:
+  Brouhaha:
+    SpeakerDiarization:
+      NoisySpeakerDiarization:
+        scope: file
+        train:
+          annotation: /home/deivison/workspace/VAD/DALI_database/train/train.rttm
+          annotated: /home/deivison/workspace/VAD/DALI_database/train/train.uem
+          uri: /home/deivison/workspace/VAD/DALI_database/train/train.lst
+        development:
+          annotation: /home/deivison/workspace/VAD/DALI_database/dev/dev.rttm
+          annotated: /home/deivison/workspace/VAD/DALI_database/dev/dev.uem
+          uri: /home/deivison/workspace/VAD/DALI_database/dev/dev.lst
+        test:
+          annotation: /home/deivison/workspace/VAD/DALI_database/test/test.rttm
+          annotated: /home/deivison/workspace/VAD/DALI_database/test/test.uem
+          uri: /home/deivison/workspace/VAD/DALI_database/test/test.lst
+
