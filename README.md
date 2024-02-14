@@ -52,11 +52,11 @@ python brouhaha/main.py apply \
 ### Citation
 
 ```bibtex
-@article{lavechin2022brouhaha,
+@article{lavechin2023brouhaha,
   Title   = {{Brouhaha: multi-task training for voice activity detection, speech-to-noise ratio, and C50 room acoustics estimation}},
   Author  = {Marvin Lavechin and Marianne Métais and Hadrien Titeux and Alodie Boissonnet and Jade Copet and Morgane Rivière and Elika Bergelson and Alejandrina Cristia and Emmanuel Dupoux and Hervé Bredin},
-  Year    = {2022},
-  Journal = {arXiv preprint arXiv: Arxiv-2210.13248}
+  Year    = {2023},
+  Journal = {ASRU}
 }
 
 @inproceedings{Bredin2020,
