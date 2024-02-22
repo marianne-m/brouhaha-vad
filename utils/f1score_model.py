@@ -1,6 +1,4 @@
 import os
-import json
-import numpy as np
 from sklearn.metrics import f1_score
 import matplotlib.pyplot as plt
 from librosa import get_duration
