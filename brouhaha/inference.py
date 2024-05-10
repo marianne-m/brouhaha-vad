@@ -71,7 +71,12 @@ class BrouhahaInference(Inference):
         ) % step_size > 0
 
         if has_last_chunk:
-            last_chunk: torch.Tensor = waveform[:, -window_size :]
+            # repeat last chunk as many times necessary to get to window_size
+            last_chunk: torch.Tensor = waveform[:, num_chunks * step_size :]
+            channel, last_window_size = last_chunk.shape
+            num_repeat = window_size // last_window_size + 1
+            last_chunk = last_chunk.repeat((channel, num_repeat))
+            last_chunk = last_chunk[:, :window_size]
 
         def __empty_list(**kwargs):
             return list()
