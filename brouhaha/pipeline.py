@@ -67,6 +67,9 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         # adapt brouhaha to pyannote.audio==3.0.0
         if hasattr(self._segmentation.model, "introspection"):
             self._frames = self._segmentation.model.introspection.frames
+        elif hasattr(self._segmentation.model, "receptive_field"):
+            # adapt brouhaha to pyannote.audio>=3.2.0
+            self._frames = self._segmentation.model.receptive_field
         else:
             self._frames = self._segmentation.model.example_output.frames
 
