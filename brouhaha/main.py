@@ -288,7 +288,7 @@ class ApplyCommand(BaseCommand):
                 for file in files:
                     yield {
                         "uri": file.stem,
-                        "audio": file
+                        "audio": str(file)
                     }
 
             data_iterator = iter()

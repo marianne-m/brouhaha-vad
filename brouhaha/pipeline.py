@@ -17,7 +17,7 @@ from pyannote.metrics.detection import (
 from pyannote.pipeline.parameter import Uniform
 
 from .utils.metrics import CustomMeanAbsoluteError, OptimalFScore
-from.inference import BrouhahaInference
+from .inference import BrouhahaInference
 
 class RegressiveActivityDetectionPipeline(Pipeline):
     """Voice activity detection pipeline

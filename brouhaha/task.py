@@ -6,7 +6,7 @@ import torch
 import yaml
 from pyannote.audio.core.io import AudioFile
 from pyannote.audio.core.task import Problem, Resolution, Specifications, Task
-from pyannote.audio.tasks.segmentation.mixins import SegmentationTaskMixin
+from pyannote.audio.tasks.segmentation.mixins import SegmentationTask as SegmentationTaskMixin
 from pyannote.audio.utils.loss import binary_cross_entropy, mse_loss
 from pyannote.core import Segment, SlidingWindowFeature
 from pyannote.database import Protocol
