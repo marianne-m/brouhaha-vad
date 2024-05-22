@@ -1,7 +1,6 @@
 from typing import Optional, Union, Callable
 
 import numpy as np
-from pyannote.audio import Inference
 from pyannote.audio.core.io import AudioFile
 from pyannote.audio.core.pipeline import Pipeline
 from pyannote.audio.pipelines.utils import (
@@ -18,7 +17,7 @@ from pyannote.metrics.detection import (
 from pyannote.pipeline.parameter import Uniform
 
 from .utils.metrics import CustomMeanAbsoluteError, OptimalFScore
-
+from .inference import BrouhahaInference
 
 class RegressiveActivityDetectionPipeline(Pipeline):
     """Voice activity detection pipeline
@@ -33,7 +32,7 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         Optimize (precision/recall) fscore. Defaults to optimizing detection
         error rate.
     inference_kwargs : dict, optional
-        Keywords arguments passed to Inference.
+        Keywords arguments passed to BrouhahaInference.
 
     Hyper-parameters
     ----------------
@@ -63,11 +62,14 @@ class RegressiveActivityDetectionPipeline(Pipeline):
         # inference_kwargs["pre_aggregation_hook"] = lambda scores: np.max(
         #     scores, axis=-1, keepdims=True
         # )
-        self._segmentation = Inference(model, **inference_kwargs)
+        self._segmentation = BrouhahaInference(model, **inference_kwargs)
 
         # adapt brouhaha to pyannote.audio==3.0.0
         if hasattr(self._segmentation.model, "introspection"):
             self._frames = self._segmentation.model.introspection.frames
+        elif hasattr(self._segmentation.model, "receptive_field"):
+            # adapt brouhaha to pyannote.audio>=3.2.0
+            self._frames = self._segmentation.model.receptive_field
         else:
             self._frames = self._segmentation.model.example_output.frames
 
