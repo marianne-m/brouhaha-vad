@@ -1,1 +1,1 @@
-pyannote.audio==3.3.2
+pyannote.audio==3.3.0
